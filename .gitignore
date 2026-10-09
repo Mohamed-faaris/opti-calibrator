@@ -27,8 +27,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
-# IntelliJ based IDEs
-.idea
+# Python
+.venv
+__pycache__
+*.pyc
+output/
 
-# Finder (MacOS) folder config
-.DS_Store
