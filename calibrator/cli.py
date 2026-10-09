@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -25,6 +25,7 @@ from rich.table import Table
 from .camera_calibrator import CameraCalibrator, save_calibration_outputs
 from .detector import PatternDetector
 from .frame_selector import CoverageTracker, FrameCandidate, OptimalFrameSelector
+from .stream_manager import open_camera_stream, enumerate_v4l2_streams, prompt_select_stream
 from .visualizer import CameraHUD, create_undistort_comparison, plot_coverage_heatmap, plot_reprojection_errors
 
 console = Console()
@@ -63,8 +64,28 @@ def parse_args():
     # Input modes (optional if resuming/refining from an existing folder)
     input_group = parser.add_mutually_exclusive_group(required=False)
     input_group.add_argument("--video", type=str, help="Path to input video file (mp4, mkv, mov, avi)")
-    input_group.add_argument("--camera", type=int, help="Live camera index (e.g. 0 for built-in or USB webcam)")
+    input_group.add_argument("--camera", type=str, help="Live camera index or path (e.g. 0, 4, /dev/video4)")
     input_group.add_argument("--images", type=str, help="Directory containing calibration image files")
+
+    # Camera stream settings
+    parser.add_argument(
+        "--resolution", "-res",
+        type=str,
+        default=None,
+        help="Target stream resolution as WxH (e.g. '1280x720', '640x480')"
+    )
+    parser.add_argument(
+        "--fps",
+        type=float,
+        default=None,
+        help="Target camera stream framerate (e.g. 30, 60)"
+    )
+    parser.add_argument(
+        "--fourcc",
+        type=str,
+        default=None,
+        help="Target pixel format FourCC code (e.g. 'MJPG', 'YUYV', 'GREY')"
+    )
 
     # Board geometry
     parser.add_argument("--cols", type=int, default=9, help="Number of inner corners along width (columns)")
@@ -162,20 +183,35 @@ def process_video_file(
 
 
 def run_live_camera_capture(
-    camera_idx: int,
+    camera_target: Union[int, str],
     detector: PatternDetector,
     target_count: int,
-    min_sharpness: float
+    min_sharpness: float,
+    resolution: Optional[str] = None,
+    fps: Optional[float] = None,
+    fourcc: Optional[str] = None
 ) -> List[FrameCandidate]:
     """Interactive OpenCV window with real-time HUD and smart auto-capture."""
-    cap = cv2.VideoCapture(camera_idx)
-    if not cap.isOpened():
-        console.print(f"[bold red]Error: Could not access camera index {camera_idx}[/bold red]")
-        sys.exit(1)
+    target_w, target_h = None, None
+    if resolution:
+        parts = resolution.lower().replace("×", "x").split("x")
+        if len(parts) == 2:
+            try:
+                target_w, target_h = int(parts[0].strip()), int(parts[1].strip())
+            except ValueError:
+                pass
 
-    # Try setting reasonable resolution
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    try:
+        cap, (init_w, init_h) = open_camera_stream(
+            camera_target=camera_target,
+            target_width=target_w,
+            target_height=target_h,
+            target_fps=fps,
+            target_fourcc=fourcc
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error: Could not access camera stream '{camera_target}': {e}[/bold red]")
+        sys.exit(1)
 
     hud = CameraHUD(grid_rows=3, grid_cols=3)
     coverage = CoverageTracker(grid_rows=3, grid_cols=3)
@@ -610,7 +646,13 @@ def run_interactive_wizard(args, base_output_dir: Path):
                         break
                     console.print(f"[red]File '{vpath}' not found. Try again.[/red]")
             elif input_type == "2":
-                args.camera = IntPrompt.ask("Enter camera index", default=0)
+                available_streams = enumerate_v4l2_streams()
+                chosen_stream, chosen_profile = prompt_select_stream(available_streams)
+                args.camera = chosen_stream.device_node
+                if chosen_profile:
+                    args.resolution = f"{chosen_profile.width}x{chosen_profile.height}"
+                    if chosen_profile.format and chosen_profile.format != "DEFAULT":
+                        args.fourcc = chosen_profile.format
             else:
                 while True:
                     ipath = Prompt.ask("Enter images directory")
@@ -637,7 +679,13 @@ def run_interactive_wizard(args, base_output_dir: Path):
                 break
             console.print(f"[red]File '{vpath}' not found. Try again.[/red]")
     elif input_choice == "2":
-        args.camera = IntPrompt.ask("Enter live camera device index", default=0)
+        available_streams = enumerate_v4l2_streams()
+        chosen_stream, chosen_profile = prompt_select_stream(available_streams)
+        args.camera = chosen_stream.device_node
+        if chosen_profile:
+            args.resolution = f"{chosen_profile.width}x{chosen_profile.height}"
+            if chosen_profile.format and chosen_profile.format != "DEFAULT":
+                args.fourcc = chosen_profile.format
     else:
         while True:
             ipath = Prompt.ask("Enter image directory path")
@@ -753,7 +801,15 @@ def main():
     if args.video:
         new_candidates = process_video_file(Path(args.video), detector, args.sample_fps, args.min_sharpness)
     elif args.camera is not None:
-        new_candidates = run_live_camera_capture(args.camera, detector, args.target_frames, args.min_sharpness)
+        new_candidates = run_live_camera_capture(
+            camera_target=args.camera,
+            detector=detector,
+            target_count=args.target_frames,
+            min_sharpness=args.min_sharpness,
+            resolution=args.resolution,
+            fps=args.fps,
+            fourcc=args.fourcc
+        )
     elif args.images:
         new_candidates = process_images_directory(Path(args.images), detector, args.min_sharpness)
 

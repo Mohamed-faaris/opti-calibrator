@@ -36,10 +36,15 @@ uv run python calibrate.py --continue econ-lap0 --filter-outliers
 * Automatically restores grid dimensions, square size, distortion model, and camera name from `camera_calibration.json`.
 * Instant load via `keyframe_data.npz` caching.
 
-### 4. Live Interactive Camera (with Real-time HUD)
+### 4. Live Interactive Camera (with Multi-Stream Support & Real-time HUD)
 ```bash
-uv run python calibrate.py --camera 0 --cols 9 --rows 6 --square-size 25
+# Auto-detects streams and prompts you to choose (e.g. RGB, Infrared, Depth):
+uv run python calibrate.py
+
+# Or specify device node and stream resolution directly:
+uv run python calibrate.py --camera /dev/video4 --resolution 1280x720
 ```
+* **Multi-Stream Support**: Automatically discovers all V4L2 streams on devices like Intel RealSense or e-con Systems cameras (e.g., RGB, Infrared, Depth) and lists all supported resolutions.
 * **Real-time HUD**: 3×3 spatial coverage grid shows which zones need samples.
 * **Smart Auto-capture**: automatically captures sharp keyframes when held steady in an uncovered zone.
 * Controls:
@@ -61,6 +66,10 @@ uv run python calibrate.py --images ./photos/
 | `-i`, `--interactive` | `False` | Launch interactive step-by-step terminal wizard |
 | `--continue`, `--resume` | `None` | Continue previous calculation from folder path or camera name (e.g. `econ-lap0`) |
 | `--camera-name`, `--name` | `None` | Camera identifier (e.g. `front_cam`). If omitted, prompts interactively or generates `camera_{w}x{h}_{timestamp}` |
+| `--camera` | `None` | Camera index or device path (e.g. `0`, `4`, `/dev/video4`) |
+| `--resolution`, `-res` | `None` | Stream resolution as `WxH` (e.g. `1280x720`, `1920x1080`, `640x480`) |
+| `--fps` | `None` | Stream frame rate (e.g. `30`, `60`) |
+| `--fourcc` | `None` | Pixel format FourCC code (e.g. `MJPG`, `YUYV`, `GREY`) |
 | `--cols` | `9` | Inner corners along width |
 | `--rows` | `6` | Inner corners along height |
 | `--square-size` | `25.0` | Square/circle spacing in mm |
