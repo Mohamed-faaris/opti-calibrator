@@ -8,18 +8,35 @@ Built with **`uv`** and native **OpenCV (C++ accelerated)**.
 
 ## ⚡ Quick Start
 
-### 1. From a Recorded Video (Recommended)
+### 1. Interactive CLI Wizard (Easiest)
+Run without arguments or with `-i` to launch the step-by-step interactive terminal wizard:
+```bash
+uv run python calibrate.py
+# or
+uv run python calibrate.py -i
+```
+* Guides you through choosing video/webcam/images.
+* Auto-detects existing calibrations in `output/` so you can continue or refine them with a single keystroke.
+
+### 2. From a Recorded Video
 Record a video while moving your checkerboard/target across all corners, edges, and tilted angles:
 ```bash
 uv run python calibrate.py --video my_recording.mp4
 ```
 
-With custom grid dimensions and paper curvature model:
+### 3. Continue / Refine Previous Calibration
+To add more frames to an existing camera calibration or re-calibrate with outlier filtering:
 ```bash
-uv run python calibrate.py --video my_recording.mp4 --cols 9 --rows 6 --square-size 25 --model rational
-```
+# Add more frames from a new video session to an existing camera:
+uv run python calibrate.py --continue econ-lap0 --video session2.mp4
 
-### 2. Live Interactive Camera (with Real-time HUD)
+# Or re-calibrate existing frames with outlier filtering:
+uv run python calibrate.py --continue econ-lap0 --filter-outliers
+```
+* Automatically restores grid dimensions, square size, distortion model, and camera name from `camera_calibration.json`.
+* Instant load via `keyframe_data.npz` caching.
+
+### 4. Live Interactive Camera (with Real-time HUD)
 ```bash
 uv run python calibrate.py --camera 0 --cols 9 --rows 6 --square-size 25
 ```
@@ -30,7 +47,7 @@ uv run python calibrate.py --camera 0 --cols 9 --rows 6 --square-size 25
   * `[C]` — Finish & calibrate
   * `[Q]` — Quit
 
-### 3. From a Directory of Images
+### 5. From a Directory of Images
 ```bash
 uv run python calibrate.py --images ./photos/
 ```
@@ -41,6 +58,8 @@ uv run python calibrate.py --images ./photos/
 
 | Flag | Default | Description |
 |---|---|---|
+| `-i`, `--interactive` | `False` | Launch interactive step-by-step terminal wizard |
+| `--continue`, `--resume` | `None` | Continue previous calculation from folder path or camera name (e.g. `econ-lap0`) |
 | `--camera-name`, `--name` | `None` | Camera identifier (e.g. `front_cam`). If omitted, prompts interactively or generates `camera_{w}x{h}_{timestamp}` |
 | `--cols` | `9` | Inner corners along width |
 | `--rows` | `6` | Inner corners along height |
