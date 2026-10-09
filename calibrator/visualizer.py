@@ -9,8 +9,8 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from camera_calibrator import CalibrationResult
-from frame_selector import CoverageTracker
+from .camera_calibrator import CalibrationResult
+from .frame_selector import CoverageTracker
 
 
 class CameraHUD:
