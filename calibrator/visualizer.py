@@ -74,20 +74,31 @@ class CameraHUD:
 
         # Text: Captured count
         cov_pct = int(coverage.coverage_ratio() * 100)
-        cv2.putText(vis, f"Frames: {captured_count}/{target_count} ({cov_pct}% cov)", (460, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        if captured_count >= target_count:
+            count_str = f"Frames: {captured_count} (Target {target_count}+ met!)"
+            count_color = (0, 255, 0)
+        else:
+            count_str = f"Frames: {captured_count}/{target_count} ({cov_pct}% cov)"
+            count_color = (255, 255, 255)
+        cv2.putText(vis, count_str, (460, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, count_color, 2)
 
         # Bottom guidance bar
         cv2.rectangle(vis, (0, h - 45), (w, h), (20, 20, 20), -1)
         missing = coverage.missing_zones()
-        if missing:
+        if captured_count >= target_count:
+            guidance = f"Target {target_count}+ met ({captured_count} frames)! Press 'C' to calibrate or keep collecting"
+            g_color = (0, 255, 0)
+        elif missing:
             guidance = f"Move board to: {', '.join(missing[:3])}"
+            g_color = (0, 255, 255)
         else:
-            guidance = "Excellent coverage! Press SPACE or 'C' to calibrate"
+            guidance = f"Good coverage ({captured_count}/{target_count})! Press 'C' to calibrate or keep collecting"
+            g_color = (0, 255, 255)
 
         if message:
             guidance = message
 
-        cv2.putText(vis, guidance, (15, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        cv2.putText(vis, guidance, (15, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, g_color, 2)
         cv2.putText(vis, "[SPACE]: Capture  [C]: Calibrate  [Q]: Quit", (w - 380, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
 
         return vis

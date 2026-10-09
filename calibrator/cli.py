@@ -206,12 +206,12 @@ def run_live_camera_capture(
         is_steady = detection.sharpness >= min_sharpness
         now = time.time()
 
-        # Auto capture condition: pattern found, steady, and at least 1.5s since last capture
+        # Auto capture condition: pattern found, steady, and at least 1.0s since last capture
         should_capture = False
-        if detection.found and is_steady and (now - last_auto_capture_time > 1.5):
-            # Check if this zone needs more samples
+        if detection.found and is_steady and (now - last_auto_capture_time > 1.0):
+            # Prioritize under-represented zones, but continue collecting until 'C' is pressed
             zr, zc = detection.coverage_zone
-            if coverage.counts[zr, zc] < 4 or len(candidates) < target_count:
+            if coverage.counts[zr, zc] < 6 or (len(candidates) < target_count) or (detection.sharpness > min_sharpness * 1.3):
                 should_capture = True
                 last_auto_capture_time = now
 
@@ -220,6 +220,7 @@ def run_live_camera_capture(
             break
         elif key in (ord('c'), ord('C')):
             if len(candidates) >= 4:
+                console.print(f"\n[bold green]✓ Capture finished! Collected {len(candidates)} frames. Applying target frames selection...[/bold green]")
                 break
             else:
                 console.print("[yellow]Need at least 4 captured frames before calibrating![/yellow]")
@@ -787,10 +788,10 @@ def main():
     if len(all_candidates) > target_count:
         selector = OptimalFrameSelector(target_frames=target_count, min_sharpness=args.min_sharpness)
         selected_frames = selector.select(all_candidates, image_size[0], image_size[1])
+        console.print(f"[green]✓ Selected {len(selected_frames)} spatially optimal frames from {len(all_candidates)} collected frames[/green]")
     else:
         selected_frames = all_candidates
-
-    console.print(f"[green]✓ Selected {len(selected_frames)} spatially optimal frames for calibration[/green]")
+        console.print(f"[green]✓ Using all {len(selected_frames)} collected frames for calibration[/green]")
 
     # 6. Run Calibration
     calibrator = CameraCalibrator(distortion_model=args.model)
