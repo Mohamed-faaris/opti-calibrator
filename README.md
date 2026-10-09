@@ -70,9 +70,9 @@ uv run python calibrate.py --images ./photos/
 | `--resolution`, `-res` | `None` | Stream resolution as `WxH` (e.g. `1280x720`, `1920x1080`, `640x480`) |
 | `--fps` | `None` | Stream frame rate (e.g. `30`, `60`) |
 | `--fourcc` | `None` | Pixel format FourCC code (e.g. `MJPG`, `YUYV`, `GREY`) |
-| `--cols` | `9` | Inner corners along width |
-| `--rows` | `6` | Inner corners along height |
-| `--square-size` | `25.0` | Square/circle spacing in mm |
+| `--cols` | `8` | Inner corners along width |
+| `--rows` | `5` | Inner corners along height |
+| `--square-size` | `40.0` | Square/circle spacing in mm |
 | `--pattern` | `checkerboard` | `checkerboard`, `circles`, or `asymmetric_circles` |
 | `--model` | `standard` / `rational` | **Flat target (rigid glass/aluminum/acrylic)**: use `--model standard` (5-param $k_1, k_2, p_1, p_2, k_3$).<br>**Paper print (glued to cardboard or flexible)**: use `--model rational` (8-param) to compensate for slight non-flat curvature |
 | `--target-frames` | `25` | Number of diverse keyframes to pick |

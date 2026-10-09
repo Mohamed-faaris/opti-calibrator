@@ -55,9 +55,9 @@ def generate_object_points(
 class PatternDetector:
     def __init__(
         self,
-        rows: int = 6,
-        cols: int = 9,
-        square_size_mm: float = 25.0,
+        rows: int = 5,
+        cols: int = 8,
+        square_size_mm: float = 40.0,
         pattern_type: str = "checkerboard"
     ):
         self.rows = rows

@@ -88,9 +88,9 @@ def parse_args():
     )
 
     # Board geometry
-    parser.add_argument("--cols", type=int, default=9, help="Number of inner corners along width (columns)")
-    parser.add_argument("--rows", type=int, default=6, help="Number of inner corners along height (rows)")
-    parser.add_argument("--square-size", type=float, default=25.0, help="Square side length or circle spacing in mm")
+    parser.add_argument("--cols", type=int, default=8, help="Number of inner corners along width (columns)")
+    parser.add_argument("--rows", type=int, default=5, help="Number of inner corners along height (rows)")
+    parser.add_argument("--square-size", type=float, default=40.0, help="Square side length or circle spacing in mm")
     parser.add_argument(
         "--pattern",
         type=str,
@@ -710,9 +710,9 @@ def run_interactive_wizard(args, base_output_dir: Path):
     # Grid dimensions
     console.print("\n[bold]4. Target Dimensions (Inner Corners):[/bold]")
     console.print("[dim]Inner corners = (number of black/white squares - 1)[/dim]")
-    args.cols = IntPrompt.ask("Inner corners along width (columns)", default=9)
-    args.rows = IntPrompt.ask("Inner corners along height (rows)", default=6)
-    args.square_size = FloatPrompt.ask("Square size or circle spacing (in mm)", default=25.0)
+    args.cols = IntPrompt.ask("Inner corners along width (columns)", default=8)
+    args.rows = IntPrompt.ask("Inner corners along height (rows)", default=5)
+    args.square_size = FloatPrompt.ask("Square size or circle spacing (in mm)", default=40.0)
 
     # Flatness & distortion model
     console.print("\n[bold]5. Target Flatness & Distortion Model:[/bold]")
