@@ -11,6 +11,15 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.Module = {
+        onRuntimeInitialized: function () {
+          console.log('[Calibrator] OpenCV.js loaded successfully from local server');
+          window.cvReady = true;
+        }
+      };
+    </script>
+    <script async src="/opencv.js" type="text/javascript"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

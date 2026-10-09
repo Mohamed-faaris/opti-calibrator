@@ -820,6 +820,15 @@ function ReviewStep({ config, frames, setFrames }) {
               </div>
               <button
                 className="frame-card-remove"
+                style={{ right: 34, background: 'rgba(99, 102, 241, 0.8)' }}
+                title="Inspect corners"
+                onClick={(e) => { e.stopPropagation(); setSelectedPreview(frame); }}
+              >
+                🔍
+              </button>
+              <button
+                className="frame-card-remove"
+                title="Remove frame"
                 onClick={(e) => { e.stopPropagation(); removeFrame(i); }}
               >
                 ×
@@ -916,6 +925,78 @@ function ReviewStep({ config, frames, setFrames }) {
                         : 'linear-gradient(135deg, var(--accent-danger), #ef4444)',
                   }}
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedPreview && (
+        <div className="modal-backdrop" onClick={() => setSelectedPreview(null)}>
+          <div className="modal-content animate-in" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Frame Inspector ({selectedPreview.timestamp?.toFixed(2)}s)</h3>
+              <button className="modal-close" onClick={() => setSelectedPreview(null)}>×</button>
+            </div>
+            <div style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+              <canvas
+                ref={el => {
+                  if (el && selectedPreview.imageData) {
+                    el.width = selectedPreview.width;
+                    el.height = selectedPreview.height;
+                    const ctx = el.getContext('2d');
+                    ctx.putImageData(selectedPreview.imageData, 0, 0);
+
+                    // Draw detected corners with rainbow gradient
+                    const corners = selectedPreview.corners;
+                    if (corners && corners.rows) {
+                      for (let i = 0; i < corners.rows; i++) {
+                        const x = corners.floatAt(i, 0);
+                        const y = corners.floatAt(i, 1);
+                        const hue = Math.round((i / corners.rows) * 300);
+                        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1.5;
+
+                        ctx.beginPath();
+                        ctx.arc(x, y, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Connect line to next corner in same row
+                        if (i % config.cols < config.cols - 1 && i + 1 < corners.rows) {
+                          const nx = corners.floatAt(i + 1, 0);
+                          const ny = corners.floatAt(i + 1, 1);
+                          ctx.strokeStyle = `hsla(${hue}, 100%, 60%, 0.6)`;
+                          ctx.beginPath();
+                          ctx.moveTo(x, y);
+                          ctx.lineTo(nx, ny);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+                  }
+                }}
+                style={{ maxWidth: '100%', maxHeight: 420, borderRadius: 'var(--radius-md)', objectFit: 'contain' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--font-sm)' }}>
+              <div>
+                <strong>Sharpness:</strong> {Math.round(selectedPreview.sharpness)} • <strong>Corners:</strong> {selectedPreview.cornerCount}
+              </div>
+              <div className="btn-group">
+                <button
+                  className={`btn ${selectedPreview.selected ? 'btn-danger' : 'btn-success'}`}
+                  onClick={() => {
+                    toggleFrame(frames.indexOf(selectedPreview));
+                    setSelectedPreview(prev => ({ ...prev, selected: !prev.selected }));
+                  }}
+                >
+                  {selectedPreview.selected ? 'Exclude Frame' : 'Include Frame'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => setSelectedPreview(null)}>
+                  Close
+                </button>
               </div>
             </div>
           </div>
