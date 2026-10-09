@@ -6,10 +6,12 @@ Supports standard, rational (paper targets), and thin prism distortion models.
 """
 
 import argparse
+import re
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -30,6 +32,15 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Camera Calibrator CLI — Video & Live Stream Calibration Engine",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    # Camera naming
+    parser.add_argument(
+        "--camera-name",
+        "--name",
+        type=str,
+        default=None,
+        help="Name/identifier for camera (e.g. 'front_cam', 'ov9281'). If omitted, you will be prompted or a pattern will be used."
     )
 
     # Input modes
@@ -291,7 +302,34 @@ def process_images_directory(
     return candidates
 
 
-def display_results_table(result, removed_outliers: List[int] = None):
+def resolve_camera_name(provided_name: Optional[str], image_size: Tuple[int, int]) -> str:
+    """
+    Resolves camera name. If not provided via args, interactively prompts user.
+    If empty or non-interactive, falls back to a clean camera_{w}x{h}_{timestamp} pattern.
+    """
+    if provided_name and provided_name.strip():
+        return re.sub(r'[^a-zA-Z0-9_\-]', '_', provided_name.strip())
+
+    w, h = image_size
+    now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    default_pattern = f"camera_{w}x{h}_{now_str}"
+
+    if sys.stdin.isatty():
+        try:
+            console.print("\n[bold yellow]Camera name not specified.[/bold yellow]")
+            user_input = console.input(
+                f"Enter camera name [dim](Press ENTER for '{default_pattern}')[/dim]: "
+            ).strip()
+            if user_input:
+                return re.sub(r'[^a-zA-Z0-9_\-]', '_', user_input)
+        except (KeyboardInterrupt, EOFError):
+            console.print()
+
+    console.print(f"[dim]Using generated camera name: '{default_pattern}'[/dim]")
+    return default_pattern
+
+
+def display_results_table(result, camera_name: str, removed_outliers: List[int] = None):
     """Render rich terminal summary table of calibration results."""
     K = result.camera_matrix
     D = result.dist_coeffs
@@ -303,6 +341,7 @@ def display_results_table(result, removed_outliers: List[int] = None):
     table.add_column("Parameter", style="cyan", width=28)
     table.add_column("Value", style="white")
 
+    table.add_row("Camera Name", f"[bold green]{camera_name}[/bold green]")
     table.add_row("RMS Reprojection Error", f"[{rms_style}]{result.rms_error:.4f} pixels ({quality_label})[/{rms_style}]")
     table.add_row("Distortion Model", f"[bold]{result.distortion_model.upper()}[/bold] ({len(D)} parameters)")
     table.add_row("Resolution", f"{result.image_size[0]} × {result.image_size[1]} px")
@@ -324,13 +363,13 @@ def display_results_table(result, removed_outliers: List[int] = None):
 
 def main():
     args = parse_args()
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    base_output_dir = Path(args.output_dir)
+    base_output_dir.mkdir(parents=True, exist_ok=True)
 
     console.print(Panel(
         f"[bold]Target:[/bold] {args.pattern.capitalize()} ({args.cols}×{args.rows} inner corners, {args.square_size}mm)\n"
         f"[bold]Distortion Model:[/bold] {args.model.capitalize()}\n"
-        f"[bold]Output Directory:[/bold] {output_dir.resolve()}",
+        f"[bold]Base Output Directory:[/bold] {base_output_dir.resolve()}",
         title="🚀 Camera Calibrator Initialized"
     ))
 
@@ -356,16 +395,21 @@ def main():
 
     console.print(f"[green]✓ Detected valid pattern in {len(candidates)} frames[/green]")
 
-    # 3. Select optimal diverse frames
+    # 3. Determine image dimensions and resolve camera name
     img_h, img_w = candidates[0].image.shape[:2]
     image_size = (img_w, img_h)
 
+    camera_name = resolve_camera_name(args.camera_name, image_size)
+    camera_output_dir = base_output_dir / camera_name
+    camera_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 4. Select optimal diverse frames
     selector = OptimalFrameSelector(target_frames=args.target_frames, min_sharpness=args.min_sharpness)
     selected_frames = selector.select(candidates, img_w, img_h)
 
     console.print(f"[green]✓ Selected {len(selected_frames)} spatially optimal frames for calibration[/green]")
 
-    # 4. Run Calibration
+    # 5. Run Calibration
     calibrator = CameraCalibrator(distortion_model=args.model)
     obj_points = [detector.object_points for _ in selected_frames]
     img_points = [f.corners for f in selected_frames]
@@ -383,49 +427,51 @@ def main():
             if removed_outliers:
                 console.print(f"[yellow]Filtered {len(removed_outliers)} outlier frames for improved accuracy[/yellow]")
 
-    # 5. Display Summary
-    display_results_table(result, removed_outliers)
+    # 6. Display Summary
+    display_results_table(result, camera_name, removed_outliers)
 
-    # 6. Save parameters (JSON, YAML, NPZ)
+    # 7. Save parameters (JSON, YAML, NPZ)
     config_dict = {
+        "camera_name": camera_name,
         "pattern": args.pattern,
         "rows": args.rows,
         "cols": args.cols,
         "square_size_mm": args.square_size,
         "model": args.model
     }
-    saved_files = save_calibration_outputs(result, output_dir, config_dict)
+    saved_files = save_calibration_outputs(result, camera_output_dir, config_dict, camera_name=camera_name)
 
-    # 7. Save keyframe images
+    # 8. Save keyframe images
     if args.save_frames:
-        frames_dir = output_dir / "frames"
+        frames_dir = camera_output_dir / "frames"
         frames_dir.mkdir(exist_ok=True)
         for frame_obj in selected_frames:
             if frame_obj.frame_idx not in removed_outliers:
                 annotated = detector.draw_corners(frame_obj.image, frame_obj.corners, True)
                 cv2.imwrite(str(frames_dir / f"frame_{frame_obj.frame_idx:04d}.jpg"), annotated)
 
-    # 8. Generate Visualizations (Coverage Heatmap, Error Bar Chart, Undistort Demo)
-    heatmap_path = output_dir / "coverage_map.png"
+    # 9. Generate Visualizations (Coverage Heatmap, Error Bar Chart, Undistort Demo)
+    heatmap_path = camera_output_dir / "coverage_map.png"
     active_corners = [f.corners for f in selected_frames if f.frame_idx not in removed_outliers]
     plot_coverage_heatmap(active_corners, image_size, heatmap_path)
 
-    error_plot_path = output_dir / "error_plot.png"
+    error_plot_path = camera_output_dir / "error_plot.png"
     plot_reprojection_errors(result, error_plot_path)
 
-    undistort_path = output_dir / "undistort_demo.png"
+    undistort_path = camera_output_dir / "undistort_demo.png"
     sample_frame = selected_frames[0].image
     undistorted_sample = calibrator.undistort_image(sample_frame, result)
     create_undistort_comparison(sample_frame, undistorted_sample, undistort_path)
 
     console.print(Panel(
+        f"• [cyan]Camera Name:[/cyan] [bold green]{camera_name}[/bold green]\n"
         f"• [cyan]OpenCV JSON:[/cyan] {saved_files['json']}\n"
         f"• [cyan]ROS YAML:[/cyan] {saved_files['yaml']}\n"
         f"• [cyan]NumPy NPZ:[/cyan] {saved_files['npz']}\n"
         f"• [cyan]Coverage Map:[/cyan] {heatmap_path}\n"
         f"• [cyan]Error Plot:[/cyan] {error_plot_path}\n"
         f"• [cyan]Undistort Demo:[/cyan] {undistort_path}\n"
-        f"• [cyan]Saved Frames:[/cyan] {output_dir / 'frames'}",
+        f"• [cyan]Saved Frames:[/cyan] {camera_output_dir / 'frames'}",
         title="💾 All Calibration Artifacts Saved Successfully"
     ))
 

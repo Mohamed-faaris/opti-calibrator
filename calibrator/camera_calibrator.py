@@ -189,7 +189,8 @@ class CameraCalibrator:
 def save_calibration_outputs(
     result: CalibrationResult,
     output_dir: Path,
-    config: Dict
+    config: Dict,
+    camera_name: str = "calibrated_camera"
 ) -> Dict[str, Path]:
     """Export calibration parameters to JSON, YAML (ROS), and NPZ formats."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -200,6 +201,7 @@ def save_calibration_outputs(
     # 1. JSON (OpenCV & Computer Vision standard)
     json_path = output_dir / "camera_calibration.json"
     json_data = {
+        "camera_name": camera_name,
         "calibration_info": {
             "model": result.distortion_model,
             "rms_reprojection_error_px": round(result.rms_error, 4),
@@ -230,7 +232,7 @@ def save_calibration_outputs(
     yaml_data = {
         "image_width": w,
         "image_height": h,
-        "camera_name": "calibrated_camera",
+        "camera_name": camera_name,
         "camera_matrix": {
             "rows": 3,
             "cols": 3,

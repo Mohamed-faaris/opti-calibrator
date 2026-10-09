@@ -41,24 +41,43 @@ uv run python calibrate.py --images ./photos/
 
 | Flag | Default | Description |
 |---|---|---|
+| `--camera-name`, `--name` | `None` | Camera identifier (e.g. `front_cam`). If omitted, prompts interactively or generates `camera_{w}x{h}_{timestamp}` |
 | `--cols` | `9` | Inner corners along width |
 | `--rows` | `6` | Inner corners along height |
 | `--square-size` | `25.0` | Square/circle spacing in mm |
 | `--pattern` | `checkerboard` | `checkerboard`, `circles`, or `asymmetric_circles` |
-| `--model` | `rational` | `rational` (8-param for paper/curved targets), `standard` (5-param), `thin_prism` |
+| `--model` | `standard` / `rational` | **Flat target (rigid glass/aluminum/acrylic)**: use `--model standard` (5-param $k_1, k_2, p_1, p_2, k_3$).<br>**Paper print (glued to cardboard or flexible)**: use `--model rational` (8-param) to compensate for slight non-flat curvature |
 | `--target-frames` | `25` | Number of diverse keyframes to pick |
 | `--min-sharpness`| `30.0` | Laplacian variance blur filter |
 | `--filter-outliers` | `False` | Auto-removes worst outlier frames and re-calibrates |
-| `--output-dir` | `output` | Directory for results |
+| `--output-dir` | `output` | Base directory for results |
 | `--no-gui` | `False` | Headless mode (no cv2 popup window) |
+
+---
+
+## 🎯 Target Flatness Guide: Which Model to Run?
+
+- **If your checkerboard is FLAT (Rigid target on glass, acrylic, or precision aluminum plate)**:
+  Run with `--model standard`:
+  ```bash
+  uv run python calibrate.py --video recording.mp4 --model standard --name my_camera
+  ```
+  *Why?* Standard pinhole calibration (5 parameters) is optimal and prevents overfitting higher-order radial parameters ($k_4, k_5, k_6$) when the physical target has zero warping.
+
+- **If your checkerboard is on PAPER (Printed sheet, taped or glued to cardboard)**:
+  Run with `--model rational`:
+  ```bash
+  uv run python calibrate.py --video recording.mp4 --model rational --name my_camera
+  ```
+  *Why?* Rational distortion model (8 parameters: $k_1 \dots k_6, p_1, p_2$) absorbs non-planar residual distortions caused by subtle paper wrinkles or bending.
 
 ---
 
 ## 💾 Generated Output Artifacts
 
-All calibration data is saved to `output/`:
+All calibration data is saved under `output/<camera_name>/`:
 * **`camera_calibration.json`** — Standard OpenCV camera matrix & distortion coefficients.
-* **`camera_info.yaml`** — ROS / ROS2 compliant camera profile.
+* **`camera_info.yaml`** — ROS / ROS2 compliant camera profile with camera name.
 * **`camera_calibration.npz`** — Direct NumPy binary archive (`mtx`, `dist`).
 * **`coverage_map.png`** — 2D density heatmap of sensor coverage.
 * **`error_plot.png`** — Per-view reprojection error bar chart.
