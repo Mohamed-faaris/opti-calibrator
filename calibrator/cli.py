@@ -194,6 +194,9 @@ def run_live_camera_capture(
     ))
 
     last_auto_capture_time = 0.0
+    window_name = "Camera Calibrator (Press 'C' to Calibrate)"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    window_initialized = False
 
     while True:
         ret, frame = cap.read()
@@ -202,6 +205,15 @@ def run_live_camera_capture(
 
         frame_counter += 1
         h, w = frame.shape[:2]
+
+        if not window_initialized:
+            # If camera feed is small (e.g. 640x480), open window with comfortable width
+            if w < 960:
+                disp_w = 960
+                disp_h = int(960 * (h / w))
+                cv2.resizeWindow(window_name, disp_w, disp_h)
+            window_initialized = True
+
         detection = detector.detect(frame)
         is_steady = detection.sharpness >= min_sharpness
         now = time.time()
@@ -262,7 +274,7 @@ def run_live_camera_capture(
             detection.found
         )
 
-        cv2.imshow("Camera Calibrator (Press 'C' to Calibrate)", hud_frame)
+        cv2.imshow(window_name, hud_frame)
 
     cap.release()
     cv2.destroyAllWindows()

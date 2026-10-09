@@ -60,19 +60,20 @@ class CameraHUD:
 
         cv2.addWeighted(overlay, 0.4, vis, 0.6, 0, vis)
 
-        # Top status bar background
-        cv2.rectangle(vis, (0, 0), (w, 50), (20, 20, 20), -1)
+        # Adaptive scaling factors based on image resolution
+        scale = max(0.42, min(w / 1280.0, 1.2))
+        font_scale = max(0.38, 0.55 * scale)
+        font_thick = 1 if scale < 0.85 else 2
 
-        # Text: Pattern detection status
+        # Pattern detection text & color
         pattern_str = "Pattern: DETECTED" if found_pattern else "Pattern: SEARCHING..."
         p_color = (0, 255, 0) if found_pattern else (100, 100, 255)
-        cv2.putText(vis, pattern_str, (15, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.65, p_color, 2)
 
-        # Text: Sharpness
+        # Sharpness text & color
         sharp_color = (0, 255, 0) if is_steady else (0, 165, 255)
-        cv2.putText(vis, f"Sharpness: {int(sharpness)}", (260, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, sharp_color, 2)
+        sharp_str = f"Sharpness: {int(sharpness)}"
 
-        # Text: Captured count
+        # Frame count text & color
         cov_pct = int(coverage.coverage_ratio() * 100)
         if captured_count >= target_count:
             count_str = f"Frames: {captured_count} (Target {target_count}+ met!)"
@@ -80,10 +81,8 @@ class CameraHUD:
         else:
             count_str = f"Frames: {captured_count}/{target_count} ({cov_pct}% cov)"
             count_color = (255, 255, 255)
-        cv2.putText(vis, count_str, (460, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, count_color, 2)
 
-        # Bottom guidance bar
-        cv2.rectangle(vis, (0, h - 45), (w, h), (20, 20, 20), -1)
+        # Guidance text & color
         missing = coverage.missing_zones()
         if captured_count >= target_count:
             guidance = f"Target {target_count}+ met ({captured_count} frames)! Press 'C' to calibrate or keep collecting"
@@ -98,8 +97,46 @@ class CameraHUD:
         if message:
             guidance = message
 
-        cv2.putText(vis, guidance, (15, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, g_color, 2)
-        cv2.putText(vis, "[SPACE]: Capture  [C]: Calibrate  [Q]: Quit", (w - 380, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
+        controls_str = "[SPACE]: Capture  [C]: Calibrate  [Q]: Quit"
+
+        # --- Top Status Bar ---
+        if w < 720:
+            # 2-line compact header for small cameras
+            top_bar_h = int(max(44, 52 * scale))
+            cv2.rectangle(vis, (0, 0), (w, top_bar_h), (20, 20, 20), -1)
+            y_row1 = int(top_bar_h * 0.44)
+            y_row2 = int(top_bar_h * 0.88)
+            cv2.putText(vis, pattern_str, (10, y_row1), cv2.FONT_HERSHEY_SIMPLEX, font_scale, p_color, font_thick)
+            cv2.putText(vis, f"Sharp: {int(sharpness)}", (int(w * 0.65), y_row1), cv2.FONT_HERSHEY_SIMPLEX, font_scale, sharp_color, font_thick)
+            cv2.putText(vis, count_str, (10, y_row2), cv2.FONT_HERSHEY_SIMPLEX, font_scale, count_color, font_thick)
+        else:
+            # 1-line spacious header for 720p+ cameras
+            top_bar_h = int(max(36, 46 * scale))
+            cv2.rectangle(vis, (0, 0), (w, top_bar_h), (20, 20, 20), -1)
+            y_text = int(top_bar_h * 0.68)
+            cv2.putText(vis, pattern_str, (15, y_text), cv2.FONT_HERSHEY_SIMPLEX, font_scale, p_color, font_thick)
+            cv2.putText(vis, sharp_str, (int(w * 0.36), y_text), cv2.FONT_HERSHEY_SIMPLEX, font_scale, sharp_color, font_thick)
+            cv2.putText(vis, count_str, (int(w * 0.66), y_text), cv2.FONT_HERSHEY_SIMPLEX, font_scale, count_color, font_thick)
+
+        # --- Bottom Guidance Bar ---
+        if w < 760:
+            # 2-line footer: guidance on top, control keys on bottom
+            bottom_bar_h = int(max(48, 56 * scale))
+            cv2.rectangle(vis, (0, h - bottom_bar_h), (w, h), (20, 20, 20), -1)
+            y_g = h - int(bottom_bar_h * 0.55)
+            y_c = h - int(bottom_bar_h * 0.16)
+            cv2.putText(vis, guidance, (10, y_g), cv2.FONT_HERSHEY_SIMPLEX, font_scale, g_color, font_thick)
+            cv2.putText(vis, controls_str, (10, y_c), cv2.FONT_HERSHEY_SIMPLEX, max(0.35, font_scale * 0.9), (180, 180, 180), 1)
+        else:
+            # 1-line footer: guidance on left, control keys on right
+            bottom_bar_h = int(max(34, 42 * scale))
+            cv2.rectangle(vis, (0, h - bottom_bar_h), (w, h), (20, 20, 20), -1)
+            y_text = h - int(bottom_bar_h * 0.32)
+            cv2.putText(vis, guidance, (15, y_text), cv2.FONT_HERSHEY_SIMPLEX, font_scale, g_color, font_thick)
+
+            ctrl_size = cv2.getTextSize(controls_str, cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.9, 1)[0]
+            ctrl_x = max(int(w * 0.6), w - ctrl_size[0] - 15)
+            cv2.putText(vis, controls_str, (ctrl_x, y_text), cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.9, (180, 180, 180), 1)
 
         return vis
 
