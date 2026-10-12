@@ -1,0 +1,58 @@
+{
+  "camera_name": "rl1080",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 0.5703,
+    "image_width": 1920,
+    "image_height": 1080,
+    "fov_horizontal_deg": 70.08,
+    "fov_vertical_deg": 43.03,
+    "num_views_used": 23
+  },
+  "camera_matrix": {
+    "fx": 1369.0902264220983,
+    "fy": 1369.948046628527,
+    "cx": 958.4157778147026,
+    "cy": 519.868466768921,
+    "matrix_3x3": [
+      [
+        1369.0902264220983,
+        0.0,
+        958.4157778147026
+      ],
+      [
+        0.0,
+        1369.948046628527,
+        519.868466768921
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    0.19807812481160383,
+    -0.6502279952537888,
+    0.0006142202264253225,
+    0.00015696276478402291,
+    0.5999291121234797
+  ],
+  "config": {
+    "camera_name": "rl1080",
+    "pattern": "checkerboard",
+    "rows": 5,
+    "cols": 8,
+    "square_size_mm": 40.0,
+    "model": "standard",
+    "camera_card": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-3.3)",
+    "device_node": "/dev/video8",
+    "stream_type": "RGB / Color"
+  },
+  "device_info": {
+    "card_name": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-3.3)",
+    "device_node": "/dev/video8",
+    "stream_type": "RGB / Color"
+  }
+}

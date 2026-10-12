@@ -1,0 +1,58 @@
+{
+  "camera_name": "astra720b",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 0.287,
+    "image_width": 1280,
+    "image_height": 720,
+    "fov_horizontal_deg": 69.23,
+    "fov_vertical_deg": 42.52,
+    "num_views_used": 23
+  },
+  "camera_matrix": {
+    "fx": 927.216906859915,
+    "fy": 925.3118480273982,
+    "cx": 658.1540694134918,
+    "cy": 348.58473386577487,
+    "matrix_3x3": [
+      [
+        927.216906859915,
+        0.0,
+        658.1540694134918
+      ],
+      [
+        0.0,
+        925.3118480273982,
+        348.58473386577487
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    -0.04155470982196904,
+    0.1422161809974666,
+    0.00025330095523587405,
+    0.006049467646000439,
+    -0.1116284746522688
+  ],
+  "config": {
+    "camera_name": "astra720a",
+    "pattern": "checkerboard",
+    "rows": 5,
+    "cols": 8,
+    "square_size_mm": 40.0,
+    "model": "standard",
+    "camera_card": "Astrap: Astrap (usb-0000:00:14.0-3.4.1)",
+    "device_node": "/dev/video2",
+    "stream_type": "Color (MJPEG)"
+  },
+  "device_info": {
+    "card_name": "Astrap: Astrap (usb-0000:00:14.0-3.4.1)",
+    "device_node": "/dev/video2",
+    "stream_type": "Color (MJPEG)"
+  }
+}

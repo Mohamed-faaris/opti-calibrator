@@ -1,0 +1,58 @@
+{
+  "camera_name": "astra1392",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 0.6788,
+    "image_width": 1856,
+    "image_height": 1392,
+    "fov_horizontal_deg": 67.77,
+    "fov_vertical_deg": 53.38,
+    "num_views_used": 22
+  },
+  "camera_matrix": {
+    "fx": 1381.9022467825587,
+    "fy": 1384.3321976062603,
+    "cx": 957.2628242729055,
+    "cy": 670.2697087605179,
+    "matrix_3x3": [
+      [
+        1381.9022467825587,
+        0.0,
+        957.2628242729055
+      ],
+      [
+        0.0,
+        1384.3321976062603,
+        670.2697087605179
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    -0.06085814191688287,
+    0.14373189132541478,
+    -0.0018393309923972789,
+    0.00465334568336991,
+    -0.09529644911628675
+  ],
+  "config": {
+    "camera_name": "astra1392",
+    "pattern": "checkerboard",
+    "rows": 5,
+    "cols": 8,
+    "square_size_mm": 40.0,
+    "model": "standard",
+    "camera_card": "Astrap: Astrap (usb-0000:00:14.0-3.4.1)",
+    "device_node": "/dev/video2",
+    "stream_type": "Color (MJPEG)"
+  },
+  "device_info": {
+    "card_name": "Astrap: Astrap (usb-0000:00:14.0-3.4.1)",
+    "device_node": "/dev/video2",
+    "stream_type": "Color (MJPEG)"
+  }
+}

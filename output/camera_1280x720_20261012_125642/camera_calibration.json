@@ -1,0 +1,58 @@
+{
+  "camera_name": "camera_1280x720_20261012_125642",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 0.2785,
+    "image_width": 1280,
+    "image_height": 720,
+    "fov_horizontal_deg": 68.23,
+    "fov_vertical_deg": 41.71,
+    "num_views_used": 24
+  },
+  "camera_matrix": {
+    "fx": 944.8247851487922,
+    "fy": 944.8748245995138,
+    "cx": 655.337987714692,
+    "cy": 349.3027492359658,
+    "matrix_3x3": [
+      [
+        944.8247851487922,
+        0.0,
+        655.337987714692
+      ],
+      [
+        0.0,
+        944.8748245995138,
+        349.3027492359658
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    -0.05184185781018483,
+    0.13482215242222373,
+    -0.00044440341165473033,
+    0.004698858885676077,
+    -0.08024692788505317
+  ],
+  "config": {
+    "camera_name": "camera_1280x720_20261012_125642",
+    "pattern": "checkerboard",
+    "rows": 5,
+    "cols": 8,
+    "square_size_mm": 40.0,
+    "model": "standard",
+    "camera_card": "ASUS HD webcam: ASUS HD webcam (usb-0000:00:14.0-5)",
+    "device_node": "/dev/video0",
+    "stream_type": "Color (MJPEG)"
+  },
+  "device_info": {
+    "card_name": "ASUS HD webcam: ASUS HD webcam (usb-0000:00:14.0-5)",
+    "device_node": "/dev/video0",
+    "stream_type": "Color (MJPEG)"
+  }
+}

@@ -31,5 +31,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .venv
 __pycache__
 *.pyc
-output/
+
+# output/
 

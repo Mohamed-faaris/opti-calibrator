@@ -1,0 +1,58 @@
+{
+  "camera_name": "econ-lap1",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 0.5724,
+    "image_width": 1280,
+    "image_height": 720,
+    "fov_horizontal_deg": 70.21,
+    "fov_vertical_deg": 42.65,
+    "num_views_used": 34
+  },
+  "camera_matrix": {
+    "fx": 910.4750805366422,
+    "fy": 922.1425891073468,
+    "cx": 637.6410787118838,
+    "cy": 355.1943715682356,
+    "matrix_3x3": [
+      [
+        910.4750805366422,
+        0.0,
+        637.6410787118838
+      ],
+      [
+        0.0,
+        922.1425891073468,
+        355.1943715682356
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    0.03213769366541165,
+    -0.23878385349525372,
+    -0.005602924707929585,
+    -0.0010470975985451957,
+    0.28389819514383735
+  ],
+  "config": {
+    "camera_name": "econ-lap1",
+    "pattern": "checkerboard",
+    "rows": 5,
+    "cols": 8,
+    "square_size_mm": 40.0,
+    "model": "standard",
+    "camera_card": "ASUS HD webcam: ASUS HD webcam (usb-0000:00:14.0-5)",
+    "device_node": "/dev/video0",
+    "stream_type": "Color (MJPEG)"
+  },
+  "device_info": {
+    "card_name": "ASUS HD webcam: ASUS HD webcam (usb-0000:00:14.0-5)",
+    "device_node": "/dev/video0",
+    "stream_type": "Color (MJPEG)"
+  }
+}

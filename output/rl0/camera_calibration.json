@@ -1,0 +1,58 @@
+{
+  "camera_name": "rl0",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 0.1711,
+    "image_width": 320,
+    "image_height": 180,
+    "fov_horizontal_deg": 70.75,
+    "fov_vertical_deg": 43.56,
+    "num_views_used": 23
+  },
+  "camera_matrix": {
+    "fx": 225.34595181142313,
+    "fy": 225.25709240297743,
+    "cx": 160.05657415470512,
+    "cy": 88.25199415879054,
+    "matrix_3x3": [
+      [
+        225.34595181142313,
+        0.0,
+        160.05657415470512
+      ],
+      [
+        0.0,
+        225.25709240297743,
+        88.25199415879054
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    0.1814871585752508,
+    -0.48569045344373213,
+    0.004747980549646326,
+    0.00023562012216462103,
+    0.3164167489321445
+  ],
+  "config": {
+    "camera_name": "rl0",
+    "pattern": "checkerboard",
+    "rows": 5,
+    "cols": 8,
+    "square_size_mm": 40.0,
+    "model": "standard",
+    "camera_card": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-3.3)",
+    "device_node": "/dev/video4",
+    "stream_type": "Video Capture"
+  },
+  "device_info": {
+    "card_name": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-3.3)",
+    "device_node": "/dev/video4",
+    "stream_type": "Video Capture"
+  }
+}
