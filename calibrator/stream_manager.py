@@ -228,6 +228,47 @@ def prompt_select_stream(
     return chosen_stream, chosen_profile
 
 
+def find_stream_by_name(
+    query: str,
+    streams: Optional[List[CameraDeviceStream]] = None
+) -> Optional[CameraDeviceStream]:
+    """
+    Find a camera stream by card name, stream type, or device node substring.
+    E.g. query='Intel', 'RealSense RGB', 'Astrap', or '/dev/video4'.
+    """
+    if streams is None:
+        streams = enumerate_v4l2_streams()
+
+    q = query.strip().lower()
+
+    # 1. Exact node match
+    for s in streams:
+        if s.device_node.lower() == q:
+            return s
+
+    # 2. Match node digit (e.g. "4" -> "/dev/video4")
+    if q.isdigit():
+        target_node = f"/dev/video{q}"
+        for s in streams:
+            if s.device_node.lower() == target_node:
+                return s
+
+    # 3. Match all words in query across card name + stream type (e.g. "realsense rgb")
+    q_words = [w for w in q.split() if w]
+    for s in streams:
+        combined = f"{s.card_name} {s.stream_type} {s.device_node}".lower()
+        if all(word in combined for word in q_words):
+            return s
+
+    # 4. Substring in card name
+    for s in streams:
+        if q in s.card_name.lower():
+            return s
+
+
+    return None
+
+
 def open_camera_stream(
     camera_target: Union[int, str],
     target_width: Optional[int] = None,
@@ -237,8 +278,19 @@ def open_camera_stream(
 ) -> Tuple[cv2.VideoCapture, Tuple[int, int]]:
     """
     Opens camera stream using V4L2 on Linux with requested resolution and parameters.
+    camera_target can be:
+      - Device index: 0, 4
+      - Device node path: "/dev/video4"
+      - Camera card name / query: "RealSense RGB", "Astrap", "ORBBEC"
     Returns (cap, (actual_width, actual_height)).
     """
+    # If camera_target is a string but not directly a digit or /dev/video*, check if it matches a card name
+    if isinstance(camera_target, str) and not camera_target.isdigit() and not camera_target.startswith("/dev/video"):
+        matched_stream = find_stream_by_name(camera_target)
+        if matched_stream is not None:
+            console.print(f"[cyan]Matched camera target '{camera_target}' -> {matched_stream.card_name} [{matched_stream.device_node}] ({matched_stream.stream_type})[/cyan]")
+            camera_target = matched_stream.device_node
+
     # Parse target index or device path
     if isinstance(camera_target, str) and camera_target.isdigit():
         target_idx = int(camera_target)
@@ -255,6 +307,7 @@ def open_camera_stream(
 
     if not cap.isOpened():
         raise RuntimeError(f"Could not open camera stream: {camera_target}")
+
 
     # Set custom FOURCC format if specified
     if target_fourcc:

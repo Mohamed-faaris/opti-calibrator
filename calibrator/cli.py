@@ -649,6 +649,8 @@ def run_interactive_wizard(args, base_output_dir: Path):
                 available_streams = enumerate_v4l2_streams()
                 chosen_stream, chosen_profile = prompt_select_stream(available_streams)
                 args.camera = chosen_stream.device_node
+                args.camera_card = chosen_stream.card_name
+                args.stream_type = chosen_stream.stream_type
                 if chosen_profile:
                     args.resolution = f"{chosen_profile.width}x{chosen_profile.height}"
                     if chosen_profile.format and chosen_profile.format != "DEFAULT":
@@ -682,11 +684,14 @@ def run_interactive_wizard(args, base_output_dir: Path):
         available_streams = enumerate_v4l2_streams()
         chosen_stream, chosen_profile = prompt_select_stream(available_streams)
         args.camera = chosen_stream.device_node
+        args.camera_card = chosen_stream.card_name
+        args.stream_type = chosen_stream.stream_type
         if chosen_profile:
             args.resolution = f"{chosen_profile.width}x{chosen_profile.height}"
             if chosen_profile.format and chosen_profile.format != "DEFAULT":
                 args.fourcc = chosen_profile.format
     else:
+
         while True:
             ipath = Prompt.ask("Enter image directory path")
             if Path(ipath).exists():
@@ -883,15 +888,32 @@ def main():
     display_results_table(result, camera_name, removed_outliers)
 
     # 8. Save parameters (JSON, YAML, NPZ)
+    camera_card = getattr(args, "camera_card", None)
+    device_node = getattr(args, "camera", None)
+    stream_type = getattr(args, "stream_type", None)
+
+    # If camera card not explicitly set, try resolving from args.camera
+    if device_node and not camera_card:
+        from .stream_manager import find_stream_by_name
+        matched_s = find_stream_by_name(str(device_node))
+        if matched_s:
+            camera_card = matched_s.card_name
+            device_node = matched_s.device_node
+            stream_type = stream_type or matched_s.stream_type
+
     config_dict = {
         "camera_name": camera_name,
         "pattern": args.pattern,
         "rows": args.rows,
         "cols": args.cols,
         "square_size_mm": args.square_size,
-        "model": args.model
+        "model": args.model,
+        "camera_card": camera_card or "",
+        "device_node": str(device_node) if device_node else "",
+        "stream_type": stream_type or ""
     }
     saved_files = save_calibration_outputs(result, camera_output_dir, config_dict, camera_name=camera_name)
+
 
     # 9. Save keyframe images & keyframe data cache
     if args.save_frames:

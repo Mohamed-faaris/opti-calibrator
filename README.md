@@ -104,10 +104,43 @@ uv run python calibrate.py --images ./photos/
 ## 💾 Generated Output Artifacts
 
 All calibration data is saved under `output/<camera_name>/`:
+* **`camera_calibration.npz`** — Direct NumPy binary archive (`camera_matrix`, `dist_coeffs`, `image_size`, `rms_error`).
 * **`camera_calibration.json`** — Standard OpenCV camera matrix & distortion coefficients.
 * **`camera_info.yaml`** — ROS / ROS2 compliant camera profile with camera name.
-* **`camera_calibration.npz`** — Direct NumPy binary archive (`mtx`, `dist`).
 * **`coverage_map.png`** — 2D density heatmap of sensor coverage.
 * **`error_plot.png`** — Per-view reprojection error bar chart.
 * **`undistort_demo.png`** — Side-by-side original vs undistorted image with straight grid lines.
 * **`frames/`** — All extracted keyframe photos with detected corners drawn.
+
+---
+
+## 🚀 Using Calibration in Other Programs (`calibrator.loader`)
+
+Any external script or computer vision pipeline can load calibrations using `load_calibration()`:
+
+```python
+import cv2
+from calibrator import load_calibration, list_calibrations
+
+# 1. Load by folder name, .npz path, or .json path
+calib = load_calibration("output/astra720b")  # or "astra720b", or path to .npz/.json
+
+# 2. Access camera parameters directly
+print("Camera:", calib.camera_name)
+print("Resolution:", calib.resolution_str)  # e.g. "1280x720"
+print("Width x Height:", calib.width, calib.height)
+print("Focal length (fx, fy):", calib.fx, calib.fy)
+print("Principal point (cx, cy):", calib.cx, calib.cy)
+print("K matrix (3x3):\n", calib.K)
+print("Distortion coeffs D:\n", calib.D)
+print("RMS Reprojection Error:", calib.rms_error)
+
+# 3. Fast real-time undistortion on live camera or video frames
+frame = cv2.imread("frame.jpg")
+undistorted = calib.undistort(frame)
+
+# 4. List all available calibrations saved in output/
+for c in list_calibrations():
+    print(c.camera_name, c.resolution_str, c.rms_error)
+```
+

@@ -211,6 +211,11 @@ def save_calibration_outputs(
             "fov_vertical_deg": round(result.fov_deg[1], 2),
             "num_views_used": len(result.per_view_results)
         },
+        "device_info": {
+            "card_name": config.get("camera_card", ""),
+            "device_node": config.get("device_node", ""),
+            "stream_type": config.get("stream_type", ""),
+        },
         "camera_matrix": {
             "fx": float(K[0, 0]),
             "fy": float(K[1, 1]),
@@ -233,6 +238,9 @@ def save_calibration_outputs(
         "image_width": w,
         "image_height": h,
         "camera_name": camera_name,
+        "camera_card": config.get("camera_card", ""),
+        "device_node": config.get("device_node", ""),
+        "stream_type": config.get("stream_type", ""),
         "camera_matrix": {
             "rows": 3,
             "cols": 3,
@@ -265,7 +273,11 @@ def save_calibration_outputs(
         camera_matrix=K,
         dist_coeffs=result.dist_coeffs,
         image_size=np.array([w, h]),
-        rms_error=result.rms_error
+        rms_error=result.rms_error,
+        camera_name=str(camera_name),
+        card_name=str(config.get("camera_card", "")),
+        device_node=str(config.get("device_node", "")),
+        stream_type=str(config.get("stream_type", ""))
     )
 
     return {
@@ -273,3 +285,4 @@ def save_calibration_outputs(
         "yaml": yaml_path,
         "npz": npz_path
     }
+
