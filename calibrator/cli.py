@@ -24,7 +24,7 @@ from rich.table import Table
 
 from .camera_calibrator import CameraCalibrator, save_calibration_outputs
 from .detector import PatternDetector
-from .frame_selector import CoverageTracker, FrameCandidate, OptimalFrameSelector
+from .frame_selector import CoverageTracker, FrameCandidate, OptimalFrameSelector, AdaptiveImportanceFrameSelector
 from .stream_manager import open_camera_stream, enumerate_v4l2_streams, prompt_select_stream
 from .visualizer import CameraHUD, create_undistort_comparison, plot_coverage_heatmap, plot_reprojection_errors
 
@@ -853,18 +853,23 @@ def main():
         camera_output_dir = base_output_dir / camera_name
         camera_output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 5. Select optimal diverse frames
-    target_count = args.target_frames
-    if not cli_arg_provided("--target-frames") and prev_candidates and new_candidates:
-        target_count = max(args.target_frames, len(prev_candidates) + 15)
+    # 5. Adaptive Importance Frame Selection
+    user_specified_target = cli_arg_provided("--target-frames")
+    max_cap = args.target_frames if user_specified_target else None
 
-    if len(all_candidates) > target_count:
-        selector = OptimalFrameSelector(target_frames=target_count, min_sharpness=args.min_sharpness)
-        selected_frames = selector.select(all_candidates, image_size[0], image_size[1])
-        console.print(f"[green]✓ Selected {len(selected_frames)} spatially optimal frames from {len(all_candidates)} collected frames[/green]")
-    else:
-        selected_frames = all_candidates
-        console.print(f"[green]✓ Using all {len(selected_frames)} collected frames for calibration[/green]")
+    selector = AdaptiveImportanceFrameSelector(
+        min_sharpness=args.min_sharpness,
+        similarity_threshold=0.82,
+        min_frames=12,
+        max_frames=max_cap
+    )
+    selected_frames = selector.select(all_candidates, image_size[0], image_size[1])
+
+    console.print(
+        f"[green]✓ Analyzed {len(all_candidates)} collected frames. "
+        f"Filtered duplicates & selected [bold cyan]{len(selected_frames)}[/bold cyan] geometrically important photos "
+        f"(Information Importance Score range: {min(f.importance_score for f in selected_frames):.2f} - {max(f.importance_score for f in selected_frames):.2f})[/green]"
+    )
 
     # 6. Run Calibration
     calibrator = CameraCalibrator(distortion_model=args.model)
@@ -873,6 +878,7 @@ def main():
     frame_indices = [f.frame_idx for f in selected_frames]
 
     with console.status("[bold cyan]Computing camera intrinsics and lens distortion...[/bold cyan]"):
+
         result = calibrator.calibrate(obj_points, img_points, image_size, frame_indices)
 
     removed_outliers = []
@@ -915,13 +921,20 @@ def main():
     saved_files = save_calibration_outputs(result, camera_output_dir, config_dict, camera_name=camera_name)
 
 
-    # 9. Save keyframe images & keyframe data cache
+    # 9. Save keyframe images & all sharp collected frames for downstream vision tasks
     if args.save_frames:
         frames_dir = camera_output_dir / "frames"
         frames_dir.mkdir(exist_ok=True)
         for frame_obj in selected_frames:
             if frame_obj.frame_idx not in removed_outliers and frame_obj.image is not None:
                 cv2.imwrite(str(frames_dir / f"frame_{frame_obj.frame_idx:04d}.jpg"), frame_obj.image)
+
+        # Also save all distinct sharp frames collected across the entire session
+        sharp_frames_dir = camera_output_dir / "sharp_frames"
+        sharp_frames_dir.mkdir(exist_ok=True)
+        for frame_obj in all_candidates:
+            if frame_obj.sharpness >= args.min_sharpness and frame_obj.image is not None:
+                cv2.imwrite(str(sharp_frames_dir / f"sharp_{frame_obj.frame_idx:04d}.jpg"), frame_obj.image)
 
     # Save keyframe coordinates for fast resuming in the future
     active_selected = [f for f in selected_frames if f.frame_idx not in removed_outliers]
@@ -931,8 +944,10 @@ def main():
             corners=np.array([f.corners for f in active_selected], dtype=np.float32),
             frame_indices=np.array([f.frame_idx for f in active_selected], dtype=np.int32),
             sharpness=np.array([f.sharpness for f in active_selected], dtype=np.float32),
+            importance=np.array([f.importance_score for f in active_selected], dtype=np.float32),
             image_size=np.array([image_size[0], image_size[1]], dtype=np.int32)
         )
+
 
     # 10. Generate Visualizations (Coverage Heatmap, Error Bar Chart, Undistort Demo)
     heatmap_path = camera_output_dir / "coverage_map.png"

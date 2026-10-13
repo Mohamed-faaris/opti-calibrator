@@ -120,38 +120,47 @@ class CameraCalibrator:
         object_points_list: List[np.ndarray],
         image_points_list: List[np.ndarray],
         frame_indices: List[int],
-        max_remove_ratio: float = 0.15
+        max_remove_ratio: float = 0.10,
+        min_absolute_error_px: float = 0.85
     ) -> Tuple[CalibrationResult, List[int]]:
         """
         Prune outlier frames that have disproportionately high reprojection errors,
-        then re-run calibration. Returns improved CalibrationResult and removed indices.
+        then re-run calibration. Only removes frames if:
+          1. The frame error is a genuine anomaly (error > mean + 2.5*std AND error > min_absolute_error_px).
+          2. Removing it actually improves the overall RMS error.
+        If all frames already have good sub-pixel errors, NO frames are removed.
         """
         errors = [v.error for v in calib_result.per_view_results]
-        mean_err = np.mean(errors)
-        std_err = np.std(errors)
-        threshold = mean_err + 1.5 * std_err
+        if not errors or len(errors) < 8:
+            return calib_result, []
 
-        # Keep frames with acceptable error
-        keep_mask = [e <= threshold for e in errors]
-        num_to_remove = len(errors) - sum(keep_mask)
-        max_allowed = int(len(errors) * max_remove_ratio)
+        mean_err = float(np.mean(errors))
+        std_err = float(np.std(errors))
 
-        if num_to_remove > max_allowed:
-            # Only remove worst max_allowed
-            sorted_indices = np.argsort(errors)
-            keep_indices = set(sorted_indices[:len(errors) - max_allowed])
-            keep_mask = [i in keep_indices for i in range(len(errors))]
+        # Only consider frames that are true statistical anomalies (> 2.5 sigma) AND above absolute threshold
+        threshold = max(mean_err + 2.5 * std_err, min_absolute_error_px)
 
-        if sum(keep_mask) < 4:
-            return calib_result, []  # Not enough frames to prune
+        # Identify candidate outliers
+        outlier_indices = [i for i, e in enumerate(errors) if e > threshold]
+        max_allowed = max(1, int(len(errors) * max_remove_ratio))
+
+        if len(outlier_indices) > max_allowed:
+            # Sort by error descending, only remove top worst outliers
+            sorted_outliers = sorted(outlier_indices, key=lambda idx: errors[idx], reverse=True)
+            outlier_indices = sorted_outliers[:max_allowed]
+
+        if not outlier_indices:
+            # All frames are already consistent and high quality; do NOT discard any!
+            return calib_result, []
+
+        keep_mask = [i not in outlier_indices for i in range(len(errors))]
+        if sum(keep_mask) < 6:
+            return calib_result, []
 
         filtered_obj = [object_points_list[i] for i, k in enumerate(keep_mask) if k]
         filtered_img = [image_points_list[i] for i, k in enumerate(keep_mask) if k]
         filtered_idx = [frame_indices[i] for i, k in enumerate(keep_mask) if k]
-        removed_indices = [frame_indices[i] for i, k in enumerate(keep_mask) if not k]
-
-        if not removed_indices:
-            return calib_result, []
+        removed_indices = [frame_indices[i] for i in outlier_indices]
 
         improved_result = self.calibrate(
             filtered_obj,
@@ -159,7 +168,13 @@ class CameraCalibrator:
             calib_result.image_size,
             filtered_idx
         )
+
+        # Only accept the removal if the new RMS error is strictly better
+        if improved_result.rms_error >= calib_result.rms_error:
+            return calib_result, []
+
         return improved_result, removed_indices
+
 
     def undistort_image(
         self,

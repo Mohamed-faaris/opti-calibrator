@@ -293,20 +293,25 @@ def open_camera_stream(
 
     # Parse target index or device path
     if isinstance(camera_target, str) and camera_target.isdigit():
-        target_idx = int(camera_target)
+        target_handle = int(camera_target)
     elif isinstance(camera_target, str) and camera_target.startswith("/dev/video"):
-        digits = re.findall(r"\d+", camera_target)
-        target_idx = int(digits[-1]) if digits else camera_target
+        # Pass the exact path string '/dev/videoX' to avoid FFMPEG/V4L2 index out of range
+        target_handle = camera_target
     else:
-        target_idx = camera_target
+        target_handle = camera_target
 
     # Try V4L2 backend first on Linux
-    cap = cv2.VideoCapture(target_idx, cv2.CAP_V4L2)
+    cap = cv2.VideoCapture(target_handle, cv2.CAP_V4L2)
+    if not cap.isOpened() and isinstance(target_handle, str) and target_handle.startswith("/dev/video"):
+        digits = re.findall(r"\d+", target_handle)
+        if digits:
+            cap = cv2.VideoCapture(int(digits[-1]), cv2.CAP_V4L2)
     if not cap.isOpened():
-        cap = cv2.VideoCapture(target_idx)
+        cap = cv2.VideoCapture(target_handle)
 
     if not cap.isOpened():
         raise RuntimeError(f"Could not open camera stream: {camera_target}")
+
 
 
     # Set custom FOURCC format if specified
