@@ -46,10 +46,10 @@ class CameraDeviceStream:
 
 def detect_stream_type(formats: List[str], card_name: str) -> str:
     """Infer stream type from pixel formats and card name."""
-    fmts_upper = [f.upper() for f in formats]
-    if any(f in fmts_upper for f in ["Z16", "INVZ"]):
+    fmts_upper = [f.strip().upper() for f in formats]
+    if any(f in fmts_upper for f in ["Z16", "INVZ", "INVR", "INRI", "INVI"]):
         return "Depth"
-    elif any(f in fmts_upper for f in ["GREY", "Y8I", "Y12I", "Y8"]):
+    elif any(f in fmts_upper for f in ["GREY", "Y8I", "Y12I", "Y8", "Y16"]):
         return "Infrared / Greyscale"
     elif any(f in fmts_upper for f in ["MJPG", "JPEG"]):
         return "Color (MJPEG)"
@@ -102,9 +102,9 @@ def enumerate_v4l2_streams() -> List[CameraDeviceStream]:
 
                 for line in fmts_ext.split("\n"):
                     line_s = line.strip()
-                    m_fmt = re.search(r"'([A-Z0-9]{3,4})'", line_s)
+                    m_fmt = re.search(r"'([A-Z0-9 ]{3,4})'", line_s)
                     if m_fmt:
-                        cur_fmt = m_fmt.group(1)
+                        cur_fmt = m_fmt.group(1).strip()
                         if cur_fmt not in formats:
                             formats.append(cur_fmt)
 

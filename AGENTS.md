@@ -15,9 +15,14 @@ import cv2
 # Load by camera profile name (auto-checks output/<name>)
 calib = load_calibration("astra720b")
 
+# Load and verify or filter by Stream Type (e.g. 'RGB / Color', 'Depth', 'Infrared')
+calib_rgb = load_calibration("realsense", stream_type="RGB")
+calib_depth = load_calibration("realsense", stream_type="Depth")
+
 # Or load directly from an exact file path (.npz, .json, or .yaml)
 calib = load_calibration("/path/to/output/astra720b/camera_calibration.npz")
 ```
+
 
 ---
 
@@ -51,14 +56,34 @@ Downstream programs do not need to hardcode `/dev/video*` numbers (which change 
 ```python
 from calibrator import load_calibration, find_stream_by_name
 
-# Method A: Open stream directly from the calibrated object
+# Method A: Open stream directly from the calibrated object (auto-resolves current node)
 calib = load_calibration("astra720b")
 cap, (w, h) = calib.open_stream()
 
 # Method B: Search camera stream by card name or type
-stream = find_stream_by_name("realsense rgb")       # auto-detects /dev/video8
-stream = find_stream_by_name("astrap")              # auto-detects /dev/video2
-stream = find_stream_by_name("realsense infrared")  # auto-detects /dev/video6
+stream = find_stream_by_name("realsense rgb")       # auto-detects current node (e.g. /dev/video9)
+stream = find_stream_by_name("astrap")              # auto-detects current node (e.g. /dev/video2)
+stream = find_stream_by_name("realsense infrared")  # auto-detects current node (e.g. /dev/video6)
+```
+
+### Syncing Device Nodes After Re-plugging / Using USB Hubs
+
+Whenever cameras are unplugged, reconnected to a different USB port, or plugged through a USB hub:
+
+```bash
+# Run the sync CLI tool:
+python sync_devices.py
+
+# Or preview without making changes:
+python sync_devices.py --dry-run
+```
+
+Or programmatically in Python:
+
+```python
+from calibrator import sync_device_nodes
+
+results = sync_device_nodes()
 ```
 
 

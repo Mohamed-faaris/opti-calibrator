@@ -95,17 +95,124 @@ class CameraCalibration:
         """Alias for dist_coeffs."""
         return self.dist_coeffs
 
+    def resolve_live_device_node(
+        self,
+        override_node: Optional[Union[str, int]] = None,
+        verbose: bool = True
+    ) -> str:
+        """
+        Dynamically resolve the active V4L2 device node for this camera.
+
+        Resolution logic:
+          1. Explicit user override (--camera / device_node_override): used directly.
+          2. Check recorded device_node: if it exists, verify whether card_name AND stream_type match.
+          3. If recorded node does not exist or its card/stream mismatch:
+             Scans connected cameras to find the one matching both card_name and stream_type,
+             logs a WARNING that the camera moved, and updates self.device_node.
+
+        Returns:
+            Resolved device node path (e.g. '/dev/video8').
+        """
+        import logging
+        from .stream_manager import enumerate_v4l2_streams
+        from .sync_devices import find_matching_stream, clean_card_name
+
+        logger = logging.getLogger("calibrator")
+
+        # 1. User explicit override takes top precedence
+        if override_node is not None:
+            resolved = f"/dev/video{override_node}" if isinstance(override_node, int) or str(override_node).isdigit() else str(override_node)
+            return resolved
+
+        connected = enumerate_v4l2_streams()
+        recorded_node = self.device_node
+
+        # Helper to check if a stream matches this calibration's card and stream type
+        def _stream_matches(s) -> bool:
+            card_match = True
+            if self.card_name:
+                c1 = clean_card_name(self.card_name).lower()
+                c2 = clean_card_name(s.card_name).lower()
+                card_match = (c1 == c2) or (c1 in c2) or (c2 in c1)
+            type_match = True
+            if self.stream_type and s.stream_type:
+                t1 = self.stream_type.strip().lower()
+                t2 = s.stream_type.strip().lower()
+                if "depth" in t1:
+                    type_match = "depth" in t2
+                elif any(k in t1 for k in ["ir", "infrared", "grey"]):
+                    type_match = any(k in t2 for k in ["ir", "infrared", "grey"])
+                elif any(k in t1 for k in ["color", "rgb", "mjpeg"]):
+                    type_match = any(k in t2 for k in ["color", "rgb", "mjpeg"])
+                else:
+                    type_match = (t1 == t2)
+            return card_match and type_match
+
+        # 2. Check if the recorded node is currently active and matches card & stream type
+        node_matches = False
+        if recorded_node:
+            for s in connected:
+                if s.device_node.lower() == recorded_node.lower():
+                    if _stream_matches(s):
+                        node_matches = True
+                    else:
+                        if verbose:
+                            logger.warning(
+                                f"Recorded node '{recorded_node}' for '{self.camera_name}' does not match "
+                                f"expected stream! Expected Card='{self.card_name}', Stream='{self.stream_type}'; "
+                                f"Found Card='{s.card_name}', Stream='{s.stream_type}'."
+                            )
+                    break
+
+        if node_matches and recorded_node:
+            return recorded_node
+
+        # 3. Search and find which connected camera matches card_name and stream_type
+        matched = find_matching_stream(
+            target_card_name=self.card_name,
+            target_stream_type=self.stream_type,
+            target_resolution=self.resolution,
+            connected_streams=connected,
+            camera_name=self.camera_name
+        )
+
+        if matched:
+            new_node = matched.device_node
+            if verbose:
+                logger.warning(
+                    f"[CAMERA MOVED / RE-MAPPED] Camera '{self.camera_name}' (Stream: '{self.stream_type}') "
+                    f"node changed from '{recorded_node or 'None'}' -> '{new_node}' "
+                    f"(Card: '{matched.card_name}'). Automatically updated target node."
+                )
+            self.device_node = new_node
+            return new_node
+
+        # Fallback if no matching device found on system
+        if verbose:
+            logger.warning(
+                f"Could not find connected stream matching '{self.card_name}' ({self.stream_type}). "
+                f"Falling back to recorded node '{recorded_node}'."
+            )
+        return recorded_node or self.card_name or self.camera_name
+
     def open_stream(
         self,
         fps: Optional[float] = None,
-        fourcc: Optional[str] = None
+        fourcc: Optional[str] = None,
+        device_node_override: Optional[Union[str, int]] = None
     ) -> Tuple[cv2.VideoCapture, Tuple[int, int]]:
         """
         Open the live camera stream for this calibration profile.
-        Uses device_node or card_name to identify the camera automatically.
+        
+        Args:
+            fps: Optional target framerate.
+            fourcc: Optional FourCC codec (e.g. 'MJPG').
+            device_node_override: Explicit user override (e.g. '/dev/video4' or 4). Takes precedence.
         """
         from .stream_manager import open_camera_stream
-        target = self.device_node or self.card_name or self.camera_name
+
+        target = self.resolve_live_device_node(override_node=device_node_override)
+
         return open_camera_stream(
             camera_target=target,
             target_width=self.width,
@@ -113,6 +220,7 @@ class CameraCalibration:
             target_fps=fps,
             target_fourcc=fourcc
         )
+
 
     def get_optimal_new_camera_matrix(
         self,
@@ -382,7 +490,11 @@ def load_from_yaml(yaml_path: Union[str, Path], camera_name: Optional[str] = Non
     )
 
 
-def load_calibration(path_or_dir: Union[str, Path], camera_name: Optional[str] = None) -> CameraCalibration:
+def load_calibration(
+    path_or_dir: Union[str, Path],
+    camera_name: Optional[str] = None,
+    stream_type: Optional[str] = None
+) -> CameraCalibration:
     """
     Main loader function. Auto-detects and loads calibration from:
       - .npz file
@@ -391,32 +503,81 @@ def load_calibration(path_or_dir: Union[str, Path], camera_name: Optional[str] =
       - Directory containing calibration outputs (e.g. output/astra720b)
       - Camera profile name under 'output/<name>'
       - Camera card name query matching a profile in 'output/'
+
+    Args:
+        path_or_dir: Path to calibration file/folder or camera name/card query.
+        camera_name: Optional override for camera identifier.
+        stream_type: Optional stream type filter (e.g. 'RGB / Color', 'Depth', 'Infrared', 'Color (MJPEG)').
+                     When specified, validates that the loaded profile matches this stream type,
+                     or searches across profiles for the one matching both query and stream type.
     """
+    calib: Optional[CameraCalibration] = None
+
+    # Helper to check stream type compatibility
+    def _matches_stream_type(c: CameraCalibration, req_type: str) -> bool:
+        if not c.stream_type:
+            return True
+        r = req_type.strip().lower()
+        s = c.stream_type.strip().lower()
+        if r == s or r in s or s in r:
+            return True
+        if "depth" in r and "depth" in s:
+            return True
+        if any(k in r for k in ["ir", "infrared", "grey"]) and any(k in s for k in ["ir", "infrared", "grey"]):
+            return True
+        if any(k in r for k in ["color", "rgb", "mjpeg"]) and any(k in s for k in ["color", "rgb", "mjpeg"]):
+            return True
+        return False
+
     # 1. First try direct file or directory path resolution
     try:
         file_path = _find_calibration_file(path_or_dir)
         suffix = file_path.suffix.lower()
 
         if suffix == ".npz":
-            return load_from_npz(file_path, camera_name=camera_name)
+            calib = load_from_npz(file_path, camera_name=camera_name)
         elif suffix == ".json":
-            return load_from_json(file_path, camera_name=camera_name)
+            calib = load_from_json(file_path, camera_name=camera_name)
         elif suffix in (".yaml", ".yml"):
-            return load_from_yaml(file_path, camera_name=camera_name)
+            calib = load_from_yaml(file_path, camera_name=camera_name)
+
+        if calib is not None:
+            if stream_type and not _matches_stream_type(calib, stream_type):
+                raise ValueError(
+                    f"Calibration profile '{calib.camera_name}' (stream_type='{calib.stream_type}') "
+                    f"does not match requested stream_type='{stream_type}'"
+                )
+            return calib
     except FileNotFoundError:
         pass
 
-    # 2. If not found by folder name, scan calibrations and match by card name or camera name
+    # 2. If not found directly by path, search across available profiles in output/
     query = str(path_or_dir).lower()
-    for calib in list_calibrations():
-        if calib.card_name and query in calib.card_name.lower():
-            return calib
-        if calib.device_node and query in calib.device_node.lower():
-            return calib
-        if query in calib.camera_name.lower():
-            return calib
+    all_calibs = list_calibrations()
 
+    # Filter by stream_type first if requested
+    if stream_type:
+        filtered = [c for c in all_calibs if _matches_stream_type(c, stream_type)]
+    else:
+        filtered = all_calibs
+
+    # Check matches in filtered list
+    for c in filtered:
+        if query in c.camera_name.lower():
+            return c
+        if c.card_name and query in c.card_name.lower():
+            return c
+        if c.device_node and query in c.device_node.lower():
+            return c
+
+    # Fallback: if query matches stream type directly (e.g. load_calibration("realsense", stream_type="depth"))
+    if stream_type:
+        raise FileNotFoundError(
+            f"Cannot find calibration profile matching '{path_or_dir}' with stream_type='{stream_type}'. "
+            f"Available profiles: {[f'{c.camera_name} ({c.stream_type})' for c in all_calibs]}"
+        )
     raise FileNotFoundError(f"Cannot find calibration profile matching: '{path_or_dir}'")
+
 
 
 def list_calibrations(output_dir: Union[str, Path] = "output") -> List[CameraCalibration]:

@@ -53,3 +53,6 @@ projection_matrix:
   - 0.0
   - 1.0
   - 0.0
+camera_card: 'Astrap: Astrap (usb-0000:00:14.0-2.1)'
+device_node: /dev/video8
+stream_type: Color (MJPEG)

@@ -46,13 +46,13 @@
     "cols": 8,
     "square_size_mm": 40.0,
     "model": "standard",
-    "camera_card": "Astrap: Astrap (usb-0000:00:14.0-3.4.1)",
-    "device_node": "/dev/video2",
+    "camera_card": "Astrap: Astrap (usb-0000:00:14.0-2.1)",
+    "device_node": "/dev/video8",
     "stream_type": "Color (MJPEG)"
   },
   "device_info": {
-    "card_name": "Astrap: Astrap (usb-0000:00:14.0-3.4.1)",
-    "device_node": "/dev/video2",
+    "card_name": "Astrap: Astrap (usb-0000:00:14.0-2.1)",
+    "device_node": "/dev/video8",
     "stream_type": "Color (MJPEG)"
   }
 }
