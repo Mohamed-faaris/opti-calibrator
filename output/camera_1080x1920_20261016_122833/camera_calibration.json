@@ -1,0 +1,58 @@
+{
+  "camera_name": "camera_1080x1920_20261016_122833",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 1.5755,
+    "image_width": 1080,
+    "image_height": 1920,
+    "fov_horizontal_deg": 39.19,
+    "fov_vertical_deg": 64.54,
+    "num_views_used": 37
+  },
+  "device_info": {
+    "card_name": "",
+    "device_node": "",
+    "stream_type": ""
+  },
+  "camera_matrix": {
+    "fx": 1516.9046437951795,
+    "fy": 1520.3750017280934,
+    "cx": 527.0360218158693,
+    "cy": 951.1881601992928,
+    "matrix_3x3": [
+      [
+        1516.9046437951795,
+        0.0,
+        527.0360218158693
+      ],
+      [
+        0.0,
+        1520.3750017280934,
+        951.1881601992928
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    0.23629507567521799,
+    -1.096377004755648,
+    3.394268189322129e-05,
+    -0.001908193985763045,
+    1.4251826975898088
+  ],
+  "config": {
+    "camera_name": "camera_1080x1920_20261016_122833",
+    "pattern": "checkerboard",
+    "rows": 5,
+    "cols": 8,
+    "square_size_mm": 40.0,
+    "model": "standard",
+    "camera_card": "",
+    "device_node": "",
+    "stream_type": ""
+  }
+}

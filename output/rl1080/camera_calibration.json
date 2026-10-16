@@ -46,13 +46,13 @@
     "cols": 8,
     "square_size_mm": 40.0,
     "model": "standard",
-    "camera_card": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-1)",
-    "device_node": "/dev/video18",
+    "camera_card": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-2)",
+    "device_node": "/dev/video6",
     "stream_type": "RGB / Color"
   },
   "device_info": {
-    "card_name": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-1)",
-    "device_node": "/dev/video18",
+    "card_name": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-2)",
+    "device_node": "/dev/video6",
     "stream_type": "RGB / Color"
   }
 }

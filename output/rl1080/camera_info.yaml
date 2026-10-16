@@ -53,6 +53,6 @@ projection_matrix:
   - 0.0
   - 1.0
   - 0.0
-camera_card: Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-1)
-device_node: /dev/video18
+camera_card: Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-2)
+device_node: /dev/video6
 stream_type: RGB / Color
