@@ -30,8 +30,68 @@ from .visualizer import CameraHUD, create_undistort_comparison, plot_coverage_he
 
 console = Console()
 
+HISTORY_FILE_NAME = ".calibrator_history.json"
+
+DEFAULT_SETTINGS = {
+    "cols": 8,
+    "rows": 5,
+    "square_size": 40.0,
+    "pattern": "checkerboard",
+    "model": "rational",
+    "filter_outliers": True,
+    "target_frames": 25,
+    "min_sharpness": 30.0,
+    "sample_fps": 3.0,
+    "output_dir": "output",
+    "input_type": "1",
+    "last_video": "",
+    "last_images": "",
+    "camera_name": "",
+    "camera_node": "",
+    "camera_card": "",
+    "resolution": "",
+    "fourcc": "",
+}
+
+
+def get_history_file() -> Path:
+    """Path to the persistent history file storing previous options."""
+    root_dir = Path(__file__).resolve().parent.parent
+    return root_dir / HISTORY_FILE_NAME
+
+
+def load_user_history() -> dict:
+    """Load previously saved calibration options, or default settings."""
+    hist_file = get_history_file()
+    data = dict(DEFAULT_SETTINGS)
+    if hist_file.exists():
+        try:
+            with open(hist_file, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                if isinstance(saved, dict):
+                    data.update(saved)
+        except Exception:
+            pass
+    return data
+
+
+def save_user_history(updates: dict):
+    """Save user choices to persistent history so they can serve as defaults next time."""
+    hist_file = get_history_file()
+    data = load_user_history()
+    for k, v in updates.items():
+        if v is not None:
+            data[k] = v
+    try:
+        with open(hist_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
 
 def parse_args():
+    history = load_user_history()
+
     parser = argparse.ArgumentParser(
         description="Camera Calibrator CLI — Video & Live Stream Calibration Engine",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -88,13 +148,28 @@ def parse_args():
     )
 
     # Board geometry
-    parser.add_argument("--cols", type=int, default=8, help="Number of inner corners along width (columns)")
-    parser.add_argument("--rows", type=int, default=5, help="Number of inner corners along height (rows)")
-    parser.add_argument("--square-size", type=float, default=40.0, help="Square side length or circle spacing in mm")
+    parser.add_argument(
+        "--cols",
+        type=int,
+        default=int(history.get("cols", 8)),
+        help="Number of inner corners along width (columns)"
+    )
+    parser.add_argument(
+        "--rows",
+        type=int,
+        default=int(history.get("rows", 5)),
+        help="Number of inner corners along height (rows)"
+    )
+    parser.add_argument(
+        "--square-size",
+        type=float,
+        default=float(history.get("square_size", 40.0)),
+        help="Square side length or circle spacing in mm"
+    )
     parser.add_argument(
         "--pattern",
         type=str,
-        default="checkerboard",
+        default=history.get("pattern", "checkerboard"),
         choices=["checkerboard", "circles", "asymmetric_circles"],
         help="Type of calibration pattern"
     )
@@ -103,21 +178,55 @@ def parse_args():
     parser.add_argument(
         "--model",
         type=str,
-        default="rational",
+        default=history.get("model", "rational"),
         choices=["standard", "rational", "thin_prism"],
         help="Distortion model. 'rational' (8-param) is recommended for paper prints with slight non-flat curvature"
     )
 
     # Frame filtering & optimization
-    parser.add_argument("--target-frames", type=int, default=25, help="Number of optimal diverse keyframes to use")
-    parser.add_argument("--min-sharpness", type=float, default=30.0, help="Minimum Laplacian variance to reject motion blur")
-    parser.add_argument("--sample-fps", type=float, default=3.0, help="Sampling frequency (frames per second) for video files")
-    parser.add_argument("--filter-outliers", action="store_true", help="Automatically remove high-error outlier frames and re-calibrate")
+    parser.add_argument(
+        "--target-frames",
+        type=int,
+        default=int(history.get("target_frames", 25)),
+        help="Number of optimal diverse keyframes to use"
+    )
+    parser.add_argument(
+        "--min-sharpness",
+        type=float,
+        default=float(history.get("min_sharpness", 30.0)),
+        help="Minimum Laplacian variance to reject motion blur"
+    )
+    parser.add_argument(
+        "--sample-fps",
+        type=float,
+        default=float(history.get("sample_fps", 3.0)),
+        help="Sampling frequency (frames per second) for video files"
+    )
+    parser.add_argument(
+        "--filter-outliers",
+        action=argparse.BooleanOptionalAction,
+        default=bool(history.get("filter_outliers", True)),
+        help="Automatically remove high-error outlier frames and re-calibrate"
+    )
 
     # Outputs
-    parser.add_argument("--output-dir", type=str, default="output", help="Directory where calibration outputs are saved")
-    parser.add_argument("--save-frames", action="store_true", default=True, help="Save detected keyframe images with annotations")
-    parser.add_argument("--no-gui", action="store_true", help="Disable OpenCV imshow windows (useful in headless environments)")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=history.get("output_dir", "output"),
+        help="Directory where calibration outputs are saved"
+    )
+    parser.add_argument(
+        "--save-frames",
+        action="store_true",
+        default=True,
+        help="Save detected keyframe images with annotations"
+    )
+    parser.add_argument(
+        "--no-gui",
+        action="store_true",
+        help="Disable OpenCV imshow windows (useful in headless environments)"
+    )
 
     return parser.parse_args()
 
@@ -584,6 +693,8 @@ def find_existing_calibrations(base_output_dir: Path) -> List[Tuple[str, Path, d
 
 def run_interactive_wizard(args, base_output_dir: Path):
     """Interactive wizard to guide user step-by-step through calibration setup."""
+    history = load_user_history()
+
     console.print(Panel(
         "[bold cyan]Camera Calibrator — Interactive CLI Wizard[/bold cyan]\n"
         "[dim]Easily configure and calibrate any camera without memorizing CLI arguments.[/dim]",
@@ -637,33 +748,56 @@ def run_interactive_wizard(args, base_output_dir: Path):
             console.print("  [cyan]1[/cyan]) Recorded video file")
             console.print("  [cyan]2[/cyan]) Live webcam stream")
             console.print("  [cyan]3[/cyan]) Directory of images")
-            input_type = Prompt.ask("Input source", choices=["1", "2", "3"], default="1")
+            default_inp = str(history.get("input_type", "1"))
+            if default_inp not in ["1", "2", "3"]:
+                default_inp = "1"
+            input_type = Prompt.ask("Input source", choices=["1", "2", "3"], default=default_inp)
+            history["input_type"] = input_type
             if input_type == "1":
+                last_vid = history.get("last_video", "")
+                default_vid = last_vid if (last_vid and Path(last_vid).exists()) else None
                 while True:
-                    vpath = Prompt.ask("Enter video file path")
+                    vpath = Prompt.ask("Enter video file path", default=default_vid) if default_vid else Prompt.ask("Enter video file path")
                     if Path(vpath).exists():
                         args.video = vpath
+                        history["last_video"] = vpath
                         break
                     console.print(f"[red]File '{vpath}' not found. Try again.[/red]")
+                    default_vid = None
             elif input_type == "2":
                 available_streams = enumerate_v4l2_streams()
-                chosen_stream, chosen_profile = prompt_select_stream(available_streams)
+                chosen_stream, chosen_profile = prompt_select_stream(
+                    available_streams,
+                    default_node_or_card=history.get("camera_node") or history.get("camera_card"),
+                    default_resolution=history.get("resolution")
+                )
                 args.camera = chosen_stream.device_node
                 args.camera_card = chosen_stream.card_name
                 args.stream_type = chosen_stream.stream_type
+                history["camera_node"] = chosen_stream.device_node
+                history["camera_card"] = chosen_stream.card_name
                 if chosen_profile:
                     args.resolution = f"{chosen_profile.width}x{chosen_profile.height}"
+                    history["resolution"] = args.resolution
                     if chosen_profile.format and chosen_profile.format != "DEFAULT":
                         args.fourcc = chosen_profile.format
+                        history["fourcc"] = args.fourcc
             else:
+                last_img = history.get("last_images", "")
+                default_img = last_img if (last_img and Path(last_img).exists()) else None
                 while True:
-                    ipath = Prompt.ask("Enter images directory")
+                    ipath = Prompt.ask("Enter images directory", default=default_img) if default_img else Prompt.ask("Enter images directory")
                     if Path(ipath).exists():
                         args.images = ipath
+                        history["last_images"] = ipath
                         break
                     console.print(f"[red]Directory '{ipath}' not found. Try again.[/red]")
+                    default_img = None
 
-        args.filter_outliers = Confirm.ask("Automatically filter high-error outlier frames?", default=True)
+        default_outliers = bool(history.get("filter_outliers", True))
+        args.filter_outliers = Confirm.ask("Automatically filter high-error outlier frames?", default=default_outliers)
+        history["filter_outliers"] = args.filter_outliers
+        save_user_history(history)
         return args
 
     # Start new calibration
@@ -671,53 +805,82 @@ def run_interactive_wizard(args, base_output_dir: Path):
     console.print("  [cyan]1[/cyan]) 🎥 Recorded video file (.mp4, .mkv, .mov, .avi)")
     console.print("  [cyan]2[/cyan]) 📹 Live interactive webcam (with real-time HUD)")
     console.print("  [cyan]3[/cyan]) 📁 Folder of photos/images")
-    input_choice = Prompt.ask("Select input", choices=["1", "2", "3"], default="1")
+    default_input = str(history.get("input_type", "1"))
+    if default_input not in ["1", "2", "3"]:
+        default_input = "1"
+    input_choice = Prompt.ask("Select input", choices=["1", "2", "3"], default=default_input)
+    history["input_type"] = input_choice
 
     if input_choice == "1":
+        last_vid = history.get("last_video", "")
+        default_vid = last_vid if (last_vid and Path(last_vid).exists()) else None
         while True:
-            vpath = Prompt.ask("Enter video file path")
+            vpath = Prompt.ask("Enter video file path", default=default_vid) if default_vid else Prompt.ask("Enter video file path")
             if Path(vpath).exists():
                 args.video = vpath
+                history["last_video"] = vpath
                 break
             console.print(f"[red]File '{vpath}' not found. Try again.[/red]")
+            default_vid = None
     elif input_choice == "2":
         available_streams = enumerate_v4l2_streams()
-        chosen_stream, chosen_profile = prompt_select_stream(available_streams)
+        chosen_stream, chosen_profile = prompt_select_stream(
+            available_streams,
+            default_node_or_card=history.get("camera_node") or history.get("camera_card"),
+            default_resolution=history.get("resolution")
+        )
         args.camera = chosen_stream.device_node
         args.camera_card = chosen_stream.card_name
         args.stream_type = chosen_stream.stream_type
+        history["camera_node"] = chosen_stream.device_node
+        history["camera_card"] = chosen_stream.card_name
         if chosen_profile:
             args.resolution = f"{chosen_profile.width}x{chosen_profile.height}"
+            history["resolution"] = args.resolution
             if chosen_profile.format and chosen_profile.format != "DEFAULT":
                 args.fourcc = chosen_profile.format
+                history["fourcc"] = args.fourcc
     else:
-
+        last_img = history.get("last_images", "")
+        default_img = last_img if (last_img and Path(last_img).exists()) else None
         while True:
-            ipath = Prompt.ask("Enter image directory path")
+            ipath = Prompt.ask("Enter image directory path", default=default_img) if default_img else Prompt.ask("Enter image directory path")
             if Path(ipath).exists():
                 args.images = ipath
+                history["last_images"] = ipath
                 break
             console.print(f"[red]Directory '{ipath}' not found. Try again.[/red]")
+            default_img = None
 
     # Camera name
     console.print("\n[bold]2. Camera Identification:[/bold]")
-    cam_name = Prompt.ask("Enter camera name [dim](Press ENTER for auto-generated)[/dim]", default="")
+    default_name = history.get("camera_name", "")
+    cam_name = Prompt.ask("Enter camera name [dim](Press ENTER for auto-generated or previous)[/dim]", default=default_name)
     args.camera_name = cam_name.strip() if cam_name.strip() else None
+    if args.camera_name:
+        history["camera_name"] = args.camera_name
 
     # Pattern
     console.print("\n[bold]3. Calibration Target Pattern:[/bold]")
     console.print("  [cyan]1[/cyan]) 🏁 Checkerboard (most common)")
     console.print("  [cyan]2[/cyan]) ⚪ Circles Grid")
     console.print("  [cyan]3[/cyan]) 🔘 Asymmetric Circles Grid")
-    pat_choice = Prompt.ask("Target pattern", choices=["1", "2", "3"], default="1")
-    args.pattern = {"1": "checkerboard", "2": "circles", "3": "asymmetric_circles"}[pat_choice]
+    pattern_map = {"checkerboard": "1", "circles": "2", "asymmetric_circles": "3"}
+    rev_pattern_map = {"1": "checkerboard", "2": "circles", "3": "asymmetric_circles"}
+    default_pat = pattern_map.get(history.get("pattern", "checkerboard"), "1")
+    pat_choice = Prompt.ask("Target pattern", choices=["1", "2", "3"], default=default_pat)
+    args.pattern = rev_pattern_map[pat_choice]
+    history["pattern"] = args.pattern
 
     # Grid dimensions
     console.print("\n[bold]4. Target Dimensions (Inner Corners):[/bold]")
     console.print("[dim]Inner corners = (number of black/white squares - 1)[/dim]")
-    args.cols = IntPrompt.ask("Inner corners along width (columns)", default=8)
-    args.rows = IntPrompt.ask("Inner corners along height (rows)", default=5)
-    args.square_size = FloatPrompt.ask("Square size or circle spacing (in mm)", default=40.0)
+    args.cols = IntPrompt.ask("Inner corners along width (columns)", default=int(history.get("cols", 8)))
+    args.rows = IntPrompt.ask("Inner corners along height (rows)", default=int(history.get("rows", 5)))
+    args.square_size = FloatPrompt.ask("Square size or circle spacing (in mm)", default=float(history.get("square_size", 40.0)))
+    history["cols"] = args.cols
+    history["rows"] = args.rows
+    history["square_size"] = args.square_size
 
     # Flatness & distortion model
     console.print("\n[bold]5. Target Flatness & Distortion Model:[/bold]")
@@ -725,12 +888,17 @@ def run_interactive_wizard(args, base_output_dir: Path):
     console.print("      -> Uses standard 5-parameter model (prevents overfitting)")
     console.print("  [cyan]2[/cyan]) 📄 PAPER PRINT (Printed sheet glued/taped to cardboard)")
     console.print("      -> Uses rational 8-parameter model (absorbs subtle paper curvature)")
-    flat_choice = Prompt.ask("Target type", choices=["1", "2"], default="1")
+    default_flat = "1" if history.get("model", "rational") == "standard" else "2"
+    flat_choice = Prompt.ask("Target type", choices=["1", "2"], default=default_flat)
     args.model = "standard" if flat_choice == "1" else "rational"
+    history["model"] = args.model
 
     # Outlier filter
-    args.filter_outliers = Confirm.ask("\nAutomatically filter high-error outlier frames?", default=True)
+    default_filter = bool(history.get("filter_outliers", True))
+    args.filter_outliers = Confirm.ask("\nAutomatically filter high-error outlier frames?", default=default_filter)
+    history["filter_outliers"] = args.filter_outliers
 
+    save_user_history(history)
     return args
 
 
@@ -749,6 +917,25 @@ def main():
     if not has_input:
         console.print("[bold red]Error: No input specified. Provide --video, --camera, --images, or --continue <folder>.[/bold red]")
         sys.exit(1)
+
+    # Persist the current configuration as the new default for future CLI and wizard runs
+    save_user_history({
+        "cols": args.cols,
+        "rows": args.rows,
+        "square_size": args.square_size,
+        "pattern": args.pattern,
+        "model": args.model,
+        "filter_outliers": args.filter_outliers,
+        "target_frames": getattr(args, "target_frames", 25),
+        "min_sharpness": getattr(args, "min_sharpness", 30.0),
+        "sample_fps": getattr(args, "sample_fps", 3.0),
+        "output_dir": getattr(args, "output_dir", "output"),
+        "input_type": ("1" if args.video else "2" if args.camera is not None else "3" if args.images else None),
+        "last_video": args.video if args.video else None,
+        "last_images": args.images if args.images else None,
+        "camera_node": args.camera if isinstance(args.camera, str) else None,
+        "camera_name": args.camera_name if args.camera_name else None,
+    })
 
     resume_path = None
     saved_json = {}
@@ -919,6 +1106,11 @@ def main():
         "stream_type": stream_type or ""
     }
     saved_files = save_calibration_outputs(result, camera_output_dir, config_dict, camera_name=camera_name)
+    save_user_history({
+        "camera_name": camera_name,
+        "camera_card": camera_card or "",
+        "camera_node": str(device_node) if device_node else "",
+    })
 
 
     # 9. Save keyframe images & all sharp collected frames for downstream vision tasks

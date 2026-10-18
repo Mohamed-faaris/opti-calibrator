@@ -164,7 +164,9 @@ def _fallback_opencv_enumeration() -> List[CameraDeviceStream]:
 
 
 def prompt_select_stream(
-    streams: List[CameraDeviceStream]
+    streams: List[CameraDeviceStream],
+    default_node_or_card: Optional[str] = None,
+    default_resolution: Optional[str] = None
 ) -> Tuple[CameraDeviceStream, Optional[StreamProfile]]:
     """Interactive wizard to pick a camera stream and resolution."""
     if not streams:
@@ -187,7 +189,13 @@ def prompt_select_stream(
     table.add_column("Stream Type", style="green")
     table.add_column("Top Resolutions", style="dim")
 
+    default_stream_idx = 1
     for i, s in enumerate(streams, 1):
+        if default_node_or_card and (
+            s.device_node == default_node_or_card
+            or default_node_or_card.lower() in s.card_name.lower()
+        ):
+            default_stream_idx = i
         top_res = ", ".join([p.resolution_str for p in s.profiles[:3]])
         if len(s.profiles) > 3:
             top_res += f" (+{len(s.profiles) - 3} more)"
@@ -197,7 +205,7 @@ def prompt_select_stream(
     stream_idx = IntPrompt.ask(
         "Select camera stream number",
         choices=[str(i) for i in range(1, len(streams) + 1)],
-        default=1
+        default=default_stream_idx
     )
     chosen_stream = streams[stream_idx - 1]
 
@@ -215,11 +223,20 @@ def prompt_select_stream(
         console.print("  [cyan]default[/cyan]) Use camera native default")
 
         rec_default = "1"
-        # If 1280x720 exists, find its index
-        for k, p in enumerate(chosen_stream.profiles[:8], 1):
-            if p.width == 1280 and p.height == 720:
-                rec_default = str(k)
-                break
+        # If default_resolution or 1280x720 exists, find its index
+        matched_user_default = False
+        if default_resolution:
+            for k, p in enumerate(chosen_stream.profiles[:8], 1):
+                if p.resolution_str == default_resolution:
+                    rec_default = str(k)
+                    matched_user_default = True
+                    break
+
+        if not matched_user_default:
+            for k, p in enumerate(chosen_stream.profiles[:8], 1):
+                if p.width == 1280 and p.height == 720:
+                    rec_default = str(k)
+                    break
 
         res_choice = Prompt.ask("Choose stream resolution", choices=prof_choices, default=rec_default)
         if res_choice != "default":
@@ -316,7 +333,8 @@ def open_camera_stream(
 
     # Set custom FOURCC format if specified
     if target_fourcc:
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*target_fourcc))
+        fcc = target_fourcc.ljust(4)[:4]
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fcc))
 
     # Set requested resolution
     if target_width and target_height:
