@@ -6,10 +6,25 @@ from .detector import PatternDetector, DetectionResult
 from .frame_selector import OptimalFrameSelector, AdaptiveImportanceFrameSelector, CoverageTracker, FrameCandidate
 from .camera_calibrator import CameraCalibrator, CalibrationResult, save_calibration_outputs
 
-from .visualizer import CameraHUD, plot_coverage_heatmap, plot_reprojection_errors, create_undistort_comparison
-from .stream_manager import open_camera_stream, enumerate_v4l2_streams, prompt_select_stream, find_stream_by_name, is_frame_corrupted
-from .loader import CameraCalibration, load_calibration, load_from_npz, load_from_json, load_from_yaml, list_calibrations
-from .sync_devices import sync_device_nodes, find_matching_stream, print_sync_table
+try:
+    from .visualizer import CameraHUD, plot_coverage_heatmap, plot_reprojection_errors, create_undistort_comparison
+except ImportError:
+    pass
+
+try:
+    from .stream_manager import open_camera_stream, enumerate_v4l2_streams, prompt_select_stream, find_stream_by_name, is_frame_corrupted
+except ImportError:
+    pass
+
+try:
+    from .loader import CameraCalibration, load_calibration, load_from_npz, load_from_json, load_from_yaml, list_calibrations
+except ImportError:
+    pass
+
+try:
+    from .sync_devices import sync_device_nodes, find_matching_stream, print_sync_table
+except ImportError:
+    pass
 
 __all__ = [
     "PatternDetector",

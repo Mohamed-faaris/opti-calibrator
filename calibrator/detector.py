@@ -100,39 +100,53 @@ class PatternDetector:
                 # are oriented such that Corner 0 is top-right, Corner 1 is top-left,
                 # Corner 2 is bottom-left, Corner 3 is bottom-right relative to target plane (X right, Y down).
                 stride = self.square_size_mm + self.spacing_mm
-                self.tag_3d_corners = {}
+                self.tag_3d_corners_canonical = {}
+                self.tag_3d_corners_kalibr = {}
                 for r in range(rows):
                     for c in range(cols):
                         t_id = r * cols + c
                         x0 = c * stride
                         y0 = r * stride
-                        self.tag_3d_corners[t_id] = np.array([
+                        # Canonical OpenCV clockwise from top-left:
+                        self.tag_3d_corners_canonical[t_id] = np.array([
+                            [x0, y0, 0.0],
+                            [x0 + self.square_size_mm, y0, 0.0],
+                            [x0 + self.square_size_mm, y0 + self.square_size_mm, 0.0],
+                            [x0, y0 + self.square_size_mm, 0.0]
+                        ], dtype=np.float32)
+                        # Kalibr / mirrored AprilGrid:
+                        self.tag_3d_corners_kalibr[t_id] = np.array([
                             [x0 + self.square_size_mm, y0, 0.0],
                             [x0, y0, 0.0],
                             [x0, y0 + self.square_size_mm, 0.0],
                             [x0 + self.square_size_mm, y0 + self.square_size_mm, 0.0]
                         ], dtype=np.float32)
+                self.tag_3d_corners = None
 
                 refine_method = getattr(cv2.aruco, "CORNER_REFINE_APRILTAG", getattr(cv2.aruco, "CORNER_REFINE_SUBPIX", 1))
-                if hasattr(cv2.aruco, "ArucoDetector"):
-                    params = cv2.aruco.DetectorParameters()
-                    params.cornerRefinementMethod = refine_method
-                    params.markerBorderBits = 2  # AprilTag 36h11 / Kalibr AprilGrid targets use 2-bit border
-                    params.adaptiveThreshWinSizeMin = 3
-                    params.adaptiveThreshWinSizeMax = 23
-                    params.adaptiveThreshWinSizeStep = 4
-                    params.minMarkerPerimeterRate = 0.01
-                    self.aruco_detector = cv2.aruco.ArucoDetector(self.dictionary, params)
 
-                    # Also prepare a 1-bit border detector for custom AprilTags that use 1-bit border
-                    params_1bit = cv2.aruco.DetectorParameters()
-                    params_1bit.cornerRefinementMethod = refine_method
-                    params_1bit.markerBorderBits = 1
-                    params_1bit.adaptiveThreshWinSizeMin = 3
-                    params_1bit.adaptiveThreshWinSizeMax = 23
-                    params_1bit.adaptiveThreshWinSizeStep = 4
-                    params_1bit.minMarkerPerimeterRate = 0.01
-                    self.aruco_detector_1bit = cv2.aruco.ArucoDetector(self.dictionary, params_1bit)
+                def _create_aruco_params(border_bits: int):
+                    if hasattr(cv2.aruco, "DetectorParameters_create"):
+                        p = cv2.aruco.DetectorParameters_create()
+                    else:
+                        p = cv2.aruco.DetectorParameters()
+                    p.cornerRefinementMethod = refine_method
+                    p.markerBorderBits = border_bits
+                    p.adaptiveThreshWinSizeMin = 3
+                    p.adaptiveThreshWinSizeMax = 23
+                    p.adaptiveThreshWinSizeStep = 4
+                    p.minMarkerPerimeterRate = 0.01
+                    return p
+
+                self.aruco_params_2bit = _create_aruco_params(2)
+                self.aruco_params_1bit = _create_aruco_params(1)
+
+                if hasattr(cv2.aruco, "ArucoDetector"):
+                    self.aruco_detector = cv2.aruco.ArucoDetector(self.dictionary, self.aruco_params_2bit)
+                    self.aruco_detector_1bit = cv2.aruco.ArucoDetector(self.dictionary, self.aruco_params_1bit)
+                else:
+                    self.aruco_detector = None
+                    self.aruco_detector_1bit = None
         else:
             self.object_points = generate_object_points(rows, cols, square_size_mm, self.pattern_type)
 
@@ -208,24 +222,53 @@ class PatternDetector:
             found = False
             corners = None
             mc, mi = None, None
-            if hasattr(self, "aruco_detector"):
-                mc, mi, _ = self.aruco_detector.detectMarkers(gray)
-                if mc is None or len(mc) < 3:
-                    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-                    gray_clahe = clahe.apply(gray)
-                    mc2, mi2, _ = self.aruco_detector.detectMarkers(gray_clahe)
-                    if mc2 is not None and (mc is None or len(mc2) > len(mc)):
-                        mc, mi = mc2, mi2
-                if (mc is None or len(mc) < 3) and hasattr(self, "aruco_detector_1bit"):
-                    mc1, mi1, _ = self.aruco_detector_1bit.detectMarkers(gray)
-                    if mc1 is not None and (mc is None or len(mc1) > len(mc)):
-                        mc, mi = mc1, mi1
-            else:
-                params = cv2.aruco.DetectorParameters_create() if hasattr(cv2.aruco, "DetectorParameters_create") else cv2.aruco.DetectorParameters()
-                params.cornerRefinementMethod = getattr(cv2.aruco, "CORNER_REFINE_APRILTAG", getattr(cv2.aruco, "CORNER_REFINE_SUBPIX", 1))
-                mc, mi, _ = cv2.aruco.detectMarkers(gray, self.dictionary, parameters=params)
+            def _detect_with(gray_img, p_det, p_params):
+                if p_det is not None:
+                    return p_det.detectMarkers(gray_img)
+                return cv2.aruco.detectMarkers(gray_img, self.dictionary, parameters=p_params)
+
+            # 1. Try 2-bit border (standard Kalibr / AprilGrid)
+            mc, mi, _ = _detect_with(gray, self.aruco_detector, self.aruco_params_2bit)
+            if mc is None or len(mc) < 3:
+                clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+                gray_clahe = clahe.apply(gray)
+                mc2, mi2, _ = _detect_with(gray_clahe, self.aruco_detector, self.aruco_params_2bit)
+                if mc2 is not None and (mc is None or len(mc2) > len(mc)):
+                    mc, mi = mc2, mi2
+
+            # 2. Try 1-bit border fallback
+            if mc is None or len(mc) < 3:
+                mc1, mi1, _ = _detect_with(gray, self.aruco_detector_1bit, self.aruco_params_1bit)
+                if mc1 is not None and (mc is None or len(mc1) > len(mc)):
+                    mc, mi = mc1, mi1
 
             if mc is not None and mi is not None and len(mc) >= 3:
+                # If board corner orientation has not been calibrated, determine whether canonical or Kalibr ordering has lower residual
+                if self.tag_3d_corners is None:
+                    def _eval_ordering(corner_dict):
+                        obj_p, img_p = [], []
+                        for i, tid in enumerate(mi.flatten()):
+                            if tid in corner_dict:
+                                obj_p.append(corner_dict[tid])
+                                img_p.append(mc[i][0])
+                        if len(obj_p) < 3:
+                            return 99999.0, 0
+                        all_o = np.concatenate(obj_p, axis=0)
+                        all_i = np.concatenate(img_p, axis=0)
+                        H, inliers = cv2.findHomography(all_o[:, :2], all_i, cv2.RANSAC, 4.0)
+                        if H is None or inliers is None:
+                            return 99999.0, 0
+                        pred = cv2.perspectiveTransform(all_o[:, :2].reshape(-1, 1, 2), H).reshape(-1, 2)
+                        err = np.mean(np.linalg.norm(pred - all_i, axis=1))
+                        return float(err), int(np.sum(inliers))
+
+                    err_can, in_can = _eval_ordering(self.tag_3d_corners_canonical)
+                    err_kal, in_kal = _eval_ordering(self.tag_3d_corners_kalibr)
+                    if in_kal > in_can or (in_kal == in_can and err_kal < err_can):
+                        self.tag_3d_corners = self.tag_3d_corners_kalibr
+                    else:
+                        self.tag_3d_corners = self.tag_3d_corners_canonical
+
                 obj_list = []
                 img_list = []
                 for i, t_id in enumerate(mi.flatten()):
