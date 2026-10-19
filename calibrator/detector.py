@@ -92,11 +92,31 @@ class PatternDetector:
                 dict_name = self.aruco_dict_name or "DICT_APRILTAG_36h11"
                 dict_id = getattr(cv2.aruco, dict_name, cv2.aruco.DICT_APRILTAG_36h11)
                 self.dictionary = cv2.aruco.getPredefinedDictionary(dict_id)
-                spacing = self.marker_size_mm if (self.marker_size_mm and self.marker_size_mm > 0) else (0.3 * self.square_size_mm)
-                self.grid_board = cv2.aruco.GridBoard((cols, rows), self.square_size_mm, spacing, self.dictionary)
+                self.spacing_mm = self.marker_size_mm if (self.marker_size_mm and self.marker_size_mm > 0) else (0.3 * self.square_size_mm)
+
+                # Precompute canonical 3D object points for all tags in Kalibr / AprilGrid target
+                # Tag (r, c) origin is at (c * stride, r * stride).
+                # Note: In OpenCV ArUco detector for AprilTag (tag36h11), the canonical marker corners
+                # are oriented such that Corner 0 is top-right, Corner 1 is top-left,
+                # Corner 2 is bottom-left, Corner 3 is bottom-right relative to target plane (X right, Y down).
+                stride = self.square_size_mm + self.spacing_mm
+                self.tag_3d_corners = {}
+                for r in range(rows):
+                    for c in range(cols):
+                        t_id = r * cols + c
+                        x0 = c * stride
+                        y0 = r * stride
+                        self.tag_3d_corners[t_id] = np.array([
+                            [x0 + self.square_size_mm, y0, 0.0],
+                            [x0, y0, 0.0],
+                            [x0, y0 + self.square_size_mm, 0.0],
+                            [x0 + self.square_size_mm, y0 + self.square_size_mm, 0.0]
+                        ], dtype=np.float32)
+
+                refine_method = getattr(cv2.aruco, "CORNER_REFINE_APRILTAG", getattr(cv2.aruco, "CORNER_REFINE_SUBPIX", 1))
                 if hasattr(cv2.aruco, "ArucoDetector"):
                     params = cv2.aruco.DetectorParameters()
-                    params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+                    params.cornerRefinementMethod = refine_method
                     params.markerBorderBits = 2  # AprilTag 36h11 / Kalibr AprilGrid targets use 2-bit border
                     params.adaptiveThreshWinSizeMin = 3
                     params.adaptiveThreshWinSizeMax = 23
@@ -106,7 +126,7 @@ class PatternDetector:
 
                     # Also prepare a 1-bit border detector for custom AprilTags that use 1-bit border
                     params_1bit = cv2.aruco.DetectorParameters()
-                    params_1bit.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+                    params_1bit.cornerRefinementMethod = refine_method
                     params_1bit.markerBorderBits = 1
                     params_1bit.adaptiveThreshWinSizeMin = 3
                     params_1bit.adaptiveThreshWinSizeMax = 23
@@ -173,7 +193,12 @@ class PatternDetector:
                     _, c, ids = cv2.aruco.interpolateCornersCharuco(mc, mi, gray, self.charuco_board)
 
             if c is not None and ids is not None and len(c) >= 6:
-                obj_m, img_m = self.charuco_board.matchImagePoints(c, ids)
+                if hasattr(self.charuco_board, "matchImagePoints"):
+                    obj_m, img_m = self.charuco_board.matchImagePoints(c, ids)
+                else:
+                    cb_corners = self.charuco_board.getChessboardCorners() if hasattr(self.charuco_board, "getChessboardCorners") else self.charuco_board.chessboardCorners
+                    obj_m = cb_corners[ids.flatten()]
+                    img_m = c
                 if len(img_m) >= 6:
                     found = True
                     corners = img_m.reshape(-1, 1, 2).astype(np.float32)
@@ -197,14 +222,21 @@ class PatternDetector:
                         mc, mi = mc1, mi1
             else:
                 params = cv2.aruco.DetectorParameters_create() if hasattr(cv2.aruco, "DetectorParameters_create") else cv2.aruco.DetectorParameters()
+                params.cornerRefinementMethod = getattr(cv2.aruco, "CORNER_REFINE_APRILTAG", getattr(cv2.aruco, "CORNER_REFINE_SUBPIX", 1))
                 mc, mi, _ = cv2.aruco.detectMarkers(gray, self.dictionary, parameters=params)
 
             if mc is not None and mi is not None and len(mc) >= 3:
-                obj_m, img_m = self.grid_board.matchImagePoints(mc, mi)
-                if len(img_m) >= 12:
+                obj_list = []
+                img_list = []
+                for i, t_id in enumerate(mi.flatten()):
+                    if t_id in self.tag_3d_corners:
+                        obj_list.append(self.tag_3d_corners[t_id])
+                        img_list.append(mc[i][0])
+
+                if len(obj_list) >= 3:
                     found = True
-                    corners = img_m.reshape(-1, 1, 2).astype(np.float32)
-                    obj_points = obj_m.reshape(-1, 3).astype(np.float32)
+                    corners = np.concatenate(img_list, axis=0).reshape(-1, 1, 2).astype(np.float32)
+                    obj_points = np.concatenate(obj_list, axis=0).reshape(-1, 3).astype(np.float32)
         else:
             raise ValueError(f"Unsupported pattern type: {self.pattern_type}")
 

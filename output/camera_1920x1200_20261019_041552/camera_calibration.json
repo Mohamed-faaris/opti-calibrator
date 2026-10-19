@@ -2,33 +2,33 @@
   "camera_name": "camera_1920x1200_20261019_041552",
   "calibration_info": {
     "model": "standard",
-    "rms_reprojection_error_px": 90.7508,
+    "rms_reprojection_error_px": 0.8725,
     "image_width": 1920,
     "image_height": 1200,
-    "fov_horizontal_deg": 116.8,
-    "fov_vertical_deg": 92.2,
-    "num_views_used": 78
+    "fov_horizontal_deg": 79.01,
+    "fov_vertical_deg": 54.45,
+    "num_views_used": 49
   },
   "device_info": {
-    "card_name": "See3CAM_24CUG (usb-0000:00:14.0-2)",
-    "device_node": "/dev/video0",
-    "stream_type": "Color (MJPEG)"
+    "card_name": "",
+    "device_node": "",
+    "stream_type": ""
   },
   "camera_matrix": {
-    "fx": 590.6431589147674,
-    "fy": 577.3564116015409,
-    "cx": 863.5046355884718,
-    "cy": 504.2974816462095,
+    "fx": 1164.3325320399913,
+    "fy": 1166.1777891891127,
+    "cx": 989.7660251699175,
+    "cy": 593.9093045151197,
     "matrix_3x3": [
       [
-        590.6431589147674,
+        1164.3325320399913,
         0.0,
-        863.5046355884718
+        989.7660251699175
       ],
       [
         0.0,
-        577.3564116015409,
-        504.2974816462095
+        1166.1777891891127,
+        593.9093045151197
       ],
       [
         0.0,
@@ -38,11 +38,11 @@
     ]
   },
   "distortion_coefficients": [
-    -0.07468414088601014,
-    0.0022346895483133216,
-    -0.0018650187836632033,
-    0.008661815295293605,
-    -3.288312528110414e-05
+    -0.3430536732713233,
+    0.1537892204063481,
+    -6.480923811272528e-05,
+    -0.0002772541102457266,
+    -0.0380679206667758
   ],
   "config": {
     "camera_name": "camera_1920x1200_20261019_041552",
@@ -50,11 +50,11 @@
     "rows": 4,
     "cols": 9,
     "square_size_mm": 40.0,
-    "marker_size_mm": 12.0,
+    "marker_size_mm": 13.0,
     "aruco_dict": "",
     "model": "standard",
-    "camera_card": "See3CAM_24CUG (usb-0000:00:14.0-2)",
-    "device_node": "/dev/video0",
-    "stream_type": "Color (MJPEG)"
+    "camera_card": "",
+    "device_node": "",
+    "stream_type": ""
   }
 }

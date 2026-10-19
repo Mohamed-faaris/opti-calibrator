@@ -2,33 +2,33 @@
   "camera_name": "rl720_april",
   "calibration_info": {
     "model": "standard",
-    "rms_reprojection_error_px": 70.0711,
+    "rms_reprojection_error_px": 0.7822,
     "image_width": 1280,
     "image_height": 720,
-    "fov_horizontal_deg": 62.16,
-    "fov_vertical_deg": 36.45,
-    "num_views_used": 61
+    "fov_horizontal_deg": 70.06,
+    "fov_vertical_deg": 43.19,
+    "num_views_used": 41
   },
   "device_info": {
-    "card_name": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-2)",
-    "device_node": "/dev/video6",
-    "stream_type": "RGB / Color"
+    "card_name": "",
+    "device_node": "",
+    "stream_type": ""
   },
   "camera_matrix": {
-    "fx": 1061.6782717465594,
-    "fy": 1093.4800603004232,
-    "cx": 457.2159787621035,
-    "cy": 291.5477979651959,
+    "fx": 912.9397936504673,
+    "fy": 909.3850769146102,
+    "cx": 634.1813861282344,
+    "cy": 343.7592372917639,
     "matrix_3x3": [
       [
-        1061.6782717465594,
+        912.9397936504673,
         0.0,
-        457.2159787621035
+        634.1813861282344
       ],
       [
         0.0,
-        1093.4800603004232,
-        291.5477979651959
+        909.3850769146102,
+        343.7592372917639
       ],
       [
         0.0,
@@ -38,11 +38,11 @@
     ]
   },
   "distortion_coefficients": [
-    -0.3214588491738568,
-    0.7135131083107903,
-    0.0703078005428842,
-    0.06388789081395745,
-    -1.2484122787521588
+    0.18995467278784026,
+    -0.5871994680008489,
+    0.0014890382185644038,
+    -0.0026383742516122204,
+    0.5012217016467866
   ],
   "config": {
     "camera_name": "rl720_april",
@@ -50,11 +50,11 @@
     "rows": 4,
     "cols": 9,
     "square_size_mm": 40.0,
-    "marker_size_mm": 12.0,
+    "marker_size_mm": 13.0,
     "aruco_dict": "",
     "model": "standard",
-    "camera_card": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-2)",
-    "device_node": "/dev/video6",
-    "stream_type": "RGB / Color"
+    "camera_card": "",
+    "device_node": "",
+    "stream_type": ""
   }
 }
