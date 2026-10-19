@@ -27,6 +27,7 @@ class FrameCandidate:
     area: float
     selected: bool = False
     importance_score: float = 0.0
+    object_points: Optional[np.ndarray] = None
 
 
 class CoverageTracker:

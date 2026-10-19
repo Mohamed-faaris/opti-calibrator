@@ -15,6 +15,7 @@ class DetectionResult:
     corners: Optional[np.ndarray] = None  # (N, 1, 2) float32
     sharpness: float = 0.0
     coverage_zone: Tuple[int, int] = (0, 0)
+    object_points: Optional[np.ndarray] = None  # (N, 3) float32 for charuco/aprilgrid
 
 
 def compute_sharpness(image_gray: np.ndarray) -> float:
@@ -58,14 +59,62 @@ class PatternDetector:
         rows: int = 5,
         cols: int = 8,
         square_size_mm: float = 40.0,
-        pattern_type: str = "checkerboard"
+        pattern_type: str = "checkerboard",
+        marker_size_mm: Optional[float] = None,
+        aruco_dict_name: Optional[str] = None
     ):
         self.rows = rows
         self.cols = cols
         self.square_size_mm = square_size_mm
         self.pattern_type = pattern_type.lower()
         self.pattern_size = (cols, rows)  # OpenCV expects (cols, rows)
-        self.object_points = generate_object_points(rows, cols, square_size_mm, self.pattern_type)
+        self.marker_size_mm = marker_size_mm
+        self.aruco_dict_name = aruco_dict_name
+
+        if self.pattern_type in ("charuco", "aprilgrid", "kalibr"):
+            self.object_points = None
+            if self.pattern_type == "charuco":
+                dict_name = self.aruco_dict_name or "DICT_6X6_250"
+                dict_id = getattr(cv2.aruco, dict_name, cv2.aruco.DICT_6X6_250)
+                self.dictionary = cv2.aruco.getPredefinedDictionary(dict_id)
+                m_size = self.marker_size_mm if (self.marker_size_mm and self.marker_size_mm > 0) else (0.75 * self.square_size_mm)
+                self.charuco_board = cv2.aruco.CharucoBoard((cols, rows), self.square_size_mm, m_size, self.dictionary)
+                if hasattr(cv2.aruco, "CharucoDetector"):
+                    params = cv2.aruco.DetectorParameters()
+                    params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+                    params.adaptiveThreshWinSizeMin = 3
+                    params.adaptiveThreshWinSizeMax = 23
+                    params.adaptiveThreshWinSizeStep = 4
+                    params.minMarkerPerimeterRate = 0.01
+                    charuco_params = cv2.aruco.CharucoParameters()
+                    self.charuco_detector = cv2.aruco.CharucoDetector(self.charuco_board, charuco_params, params)
+            elif self.pattern_type in ("aprilgrid", "kalibr"):
+                dict_name = self.aruco_dict_name or "DICT_APRILTAG_36h11"
+                dict_id = getattr(cv2.aruco, dict_name, cv2.aruco.DICT_APRILTAG_36h11)
+                self.dictionary = cv2.aruco.getPredefinedDictionary(dict_id)
+                spacing = self.marker_size_mm if (self.marker_size_mm and self.marker_size_mm > 0) else (0.3 * self.square_size_mm)
+                self.grid_board = cv2.aruco.GridBoard((cols, rows), self.square_size_mm, spacing, self.dictionary)
+                if hasattr(cv2.aruco, "ArucoDetector"):
+                    params = cv2.aruco.DetectorParameters()
+                    params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+                    params.markerBorderBits = 2  # AprilTag 36h11 / Kalibr AprilGrid targets use 2-bit border
+                    params.adaptiveThreshWinSizeMin = 3
+                    params.adaptiveThreshWinSizeMax = 23
+                    params.adaptiveThreshWinSizeStep = 4
+                    params.minMarkerPerimeterRate = 0.01
+                    self.aruco_detector = cv2.aruco.ArucoDetector(self.dictionary, params)
+
+                    # Also prepare a 1-bit border detector for custom AprilTags that use 1-bit border
+                    params_1bit = cv2.aruco.DetectorParameters()
+                    params_1bit.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+                    params_1bit.markerBorderBits = 1
+                    params_1bit.adaptiveThreshWinSizeMin = 3
+                    params_1bit.adaptiveThreshWinSizeMax = 23
+                    params_1bit.adaptiveThreshWinSizeStep = 4
+                    params_1bit.minMarkerPerimeterRate = 0.01
+                    self.aruco_detector_1bit = cv2.aruco.ArucoDetector(self.dictionary, params_1bit)
+        else:
+            self.object_points = generate_object_points(rows, cols, square_size_mm, self.pattern_type)
 
     def detect(self, image: np.ndarray) -> DetectionResult:
         """Detect pattern corners in image with sub-pixel precision."""
@@ -75,6 +124,7 @@ class PatternDetector:
             gray = image
 
         sharpness = compute_sharpness(gray)
+        obj_points = None
 
         if self.pattern_type == "checkerboard":
             # 1. Try findChessboardCornersSB (Sector-Based: modern, sub-pixel accurate, robust to non-flat paper)
@@ -104,6 +154,57 @@ class PatternDetector:
         elif self.pattern_type == "asymmetric_circles":
             flags = cv2.CALIB_CB_ASYMMETRIC_GRID
             found, corners = cv2.findCirclesGrid(gray, self.pattern_size, flags=flags)
+
+        elif self.pattern_type == "charuco":
+            found = False
+            corners = None
+            c, ids = None, None
+            if hasattr(self, "charuco_detector"):
+                c, ids, _, _ = self.charuco_detector.detectBoard(gray)
+                if c is None or len(c) < 6:
+                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                    c2, ids2, _, _ = self.charuco_detector.detectBoard(clahe.apply(gray))
+                    if c2 is not None and (c is None or len(c2) > len(c)):
+                        c, ids = c2, ids2
+            else:
+                params = cv2.aruco.DetectorParameters_create() if hasattr(cv2.aruco, "DetectorParameters_create") else cv2.aruco.DetectorParameters()
+                mc, mi, _ = cv2.aruco.detectMarkers(gray, self.dictionary, parameters=params)
+                if mc is not None and len(mc) > 0:
+                    _, c, ids = cv2.aruco.interpolateCornersCharuco(mc, mi, gray, self.charuco_board)
+
+            if c is not None and ids is not None and len(c) >= 6:
+                obj_m, img_m = self.charuco_board.matchImagePoints(c, ids)
+                if len(img_m) >= 6:
+                    found = True
+                    corners = img_m.reshape(-1, 1, 2).astype(np.float32)
+                    obj_points = obj_m.reshape(-1, 3).astype(np.float32)
+
+        elif self.pattern_type in ("aprilgrid", "kalibr"):
+            found = False
+            corners = None
+            mc, mi = None, None
+            if hasattr(self, "aruco_detector"):
+                mc, mi, _ = self.aruco_detector.detectMarkers(gray)
+                if mc is None or len(mc) < 3:
+                    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+                    gray_clahe = clahe.apply(gray)
+                    mc2, mi2, _ = self.aruco_detector.detectMarkers(gray_clahe)
+                    if mc2 is not None and (mc is None or len(mc2) > len(mc)):
+                        mc, mi = mc2, mi2
+                if (mc is None or len(mc) < 3) and hasattr(self, "aruco_detector_1bit"):
+                    mc1, mi1, _ = self.aruco_detector_1bit.detectMarkers(gray)
+                    if mc1 is not None and (mc is None or len(mc1) > len(mc)):
+                        mc, mi = mc1, mi1
+            else:
+                params = cv2.aruco.DetectorParameters_create() if hasattr(cv2.aruco, "DetectorParameters_create") else cv2.aruco.DetectorParameters()
+                mc, mi, _ = cv2.aruco.detectMarkers(gray, self.dictionary, parameters=params)
+
+            if mc is not None and mi is not None and len(mc) >= 3:
+                obj_m, img_m = self.grid_board.matchImagePoints(mc, mi)
+                if len(img_m) >= 12:
+                    found = True
+                    corners = img_m.reshape(-1, 1, 2).astype(np.float32)
+                    obj_points = obj_m.reshape(-1, 3).astype(np.float32)
         else:
             raise ValueError(f"Unsupported pattern type: {self.pattern_type}")
 
@@ -120,13 +221,27 @@ class PatternDetector:
                 found=True,
                 corners=corners,
                 sharpness=sharpness,
-                coverage_zone=(zone_y, zone_x)
+                coverage_zone=(zone_y, zone_x),
+                object_points=obj_points
             )
 
         return DetectionResult(found=False, sharpness=sharpness)
 
     def draw_corners(self, image: np.ndarray, corners: np.ndarray, found: bool = True) -> np.ndarray:
-        """Render detected pattern corners with rainbow gradient lines."""
+        """Render detected pattern corners on image."""
         vis = image.copy()
-        cv2.drawChessboardCorners(vis, self.pattern_size, corners, found)
+        if not found or corners is None or len(corners) == 0:
+            return vis
+        if self.pattern_type in ("checkerboard", "circles", "asymmetric_circles"):
+            cv2.drawChessboardCorners(vis, self.pattern_size, corners, found)
+        elif self.pattern_type == "charuco":
+            for pt in corners[:, 0, :]:
+                x, y = int(pt[0]), int(pt[1])
+                cv2.circle(vis, (x, y), 4, (0, 255, 0), -1)
+                cv2.circle(vis, (x, y), 6, (0, 0, 255), 1)
+        elif self.pattern_type in ("aprilgrid", "kalibr"):
+            for pt in corners[:, 0, :]:
+                x, y = int(pt[0]), int(pt[1])
+                cv2.circle(vis, (x, y), 3, (0, 255, 255), -1)
+                cv2.circle(vis, (x, y), 5, (255, 0, 0), 1)
         return vis

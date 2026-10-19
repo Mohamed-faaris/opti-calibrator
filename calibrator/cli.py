@@ -36,7 +36,9 @@ DEFAULT_SETTINGS = {
     "cols": 8,
     "rows": 5,
     "square_size": 40.0,
+    "marker_size": 0.0,
     "pattern": "checkerboard",
+    "aruco_dict": "",
     "model": "rational",
     "filter_outliers": True,
     "target_frames": 25,
@@ -152,26 +154,38 @@ def parse_args():
         "--cols",
         type=int,
         default=int(history.get("cols", 8)),
-        help="Number of inner corners along width (columns)"
+        help="Number of inner corners (checkerboard), squares (charuco), or tags (aprilgrid) along width"
     )
     parser.add_argument(
         "--rows",
         type=int,
         default=int(history.get("rows", 5)),
-        help="Number of inner corners along height (rows)"
+        help="Number of inner corners (checkerboard), squares (charuco), or tags (aprilgrid) along height"
     )
     parser.add_argument(
         "--square-size",
         type=float,
         default=float(history.get("square_size", 40.0)),
-        help="Square side length or circle spacing in mm"
+        help="Square side length, circle spacing, or AprilTag size in mm"
+    )
+    parser.add_argument(
+        "--marker-size",
+        type=float,
+        default=float(history.get("marker_size", 0.0)),
+        help="ArUco marker size (ChArUco) or tag spacing (AprilGrid) in mm. If 0, auto-calculated from square size"
     )
     parser.add_argument(
         "--pattern",
         type=str,
         default=history.get("pattern", "checkerboard"),
-        choices=["checkerboard", "circles", "asymmetric_circles"],
+        choices=["checkerboard", "circles", "asymmetric_circles", "charuco", "aprilgrid", "kalibr"],
         help="Type of calibration pattern"
+    )
+    parser.add_argument(
+        "--aruco-dict",
+        type=str,
+        default=history.get("aruco_dict", ""),
+        help="ArUco dictionary (e.g. 'DICT_6X6_250' for ChArUco or 'DICT_APRILTAG_36h11' for AprilGrid)"
     )
 
     # Lens & model customization
@@ -281,7 +295,8 @@ def process_video_file(
                         sharpness=detection.sharpness,
                         coverage_zone=detection.coverage_zone,
                         center=(cx, cy),
-                        area=area
+                        area=area,
+                        object_points=detection.object_points
                     ))
 
             frame_idx += 1
@@ -401,7 +416,8 @@ def run_live_camera_capture(
                 coverage_zone=detection.coverage_zone,
                 center=(cx, cy),
                 area=float(cv2.contourArea(hull)),
-                selected=True
+                selected=True,
+                object_points=detection.object_points
             ))
 
         # Render display frame with HUD
@@ -469,7 +485,8 @@ def process_images_directory(
                     coverage_zone=detection.coverage_zone,
                     center=(cx, cy),
                     area=float(cv2.contourArea(hull)),
-                    selected=True
+                    selected=True,
+                    object_points=detection.object_points
                 ))
 
             progress.update(task, advance=1)
@@ -531,6 +548,7 @@ def load_previous_session(
         corners_arr = data["corners"]  # (M, N, 1, 2)
         indices_arr = data["frame_indices"]
         sharpness_arr = data["sharpness"]
+        obj_pts_arr = data["object_points"] if "object_points" in data else None
         if "image_size" in data:
             image_size = (int(data["image_size"][0]), int(data["image_size"][1]))
 
@@ -539,6 +557,7 @@ def load_previous_session(
             frame_idx = int(indices_arr[i])
             corners = corners_arr[i].astype(np.float32)
             sharpness = float(sharpness_arr[i])
+            obj_p = obj_pts_arr[i].astype(np.float32) if obj_pts_arr is not None else None
 
             img_file = frames_dir / f"frame_{frame_idx:04d}.jpg"
             img = cv2.imread(str(img_file)) if img_file.exists() else None
@@ -563,7 +582,8 @@ def load_previous_session(
                 coverage_zone=(zx, zy),
                 center=(cx, cy),
                 area=area,
-                selected=True
+                selected=True,
+                object_points=obj_p
             ))
         console.print(f"[green]✓ Loaded {len(candidates)} cached keyframes from previous session[/green]")
 
@@ -607,7 +627,8 @@ def load_previous_session(
                                 coverage_zone=det_res.coverage_zone,
                                 center=(cx, cy),
                                 area=float(cv2.contourArea(hull)),
-                                selected=True
+                                selected=True,
+                                object_points=det_res.object_points
                             ))
                         progress.update(task, advance=1)
                 console.print(f"[green]✓ Successfully detected patterns in {len(candidates)}/{len(img_files)} previous frames[/green]")
@@ -863,21 +884,62 @@ def run_interactive_wizard(args, base_output_dir: Path):
     # Pattern
     console.print("\n[bold]3. Calibration Target Pattern:[/bold]")
     console.print("  [cyan]1[/cyan]) 🏁 Checkerboard (most common)")
-    console.print("  [cyan]2[/cyan]) ⚪ Circles Grid")
+    console.print("  [cyan]2[/cyan]) ⚪ Circles Grid (symmetric)")
     console.print("  [cyan]3[/cyan]) 🔘 Asymmetric Circles Grid")
-    pattern_map = {"checkerboard": "1", "circles": "2", "asymmetric_circles": "3"}
-    rev_pattern_map = {"1": "checkerboard", "2": "circles", "3": "asymmetric_circles"}
+    console.print("  [cyan]4[/cyan]) 🎯 ChArUco (Checkerboard + ArUco - robust to partial views & wide-angle)")
+    console.print("  [cyan]5[/cyan]) 🤖 Kalibr / AprilGrid (AprilTag tag36h11 grid - SLAM / robotics standard)")
+    pattern_map = {
+        "checkerboard": "1",
+        "circles": "2",
+        "asymmetric_circles": "3",
+        "charuco": "4",
+        "aprilgrid": "5",
+        "kalibr": "5",
+    }
+    rev_pattern_map = {
+        "1": "checkerboard",
+        "2": "circles",
+        "3": "asymmetric_circles",
+        "4": "charuco",
+        "5": "aprilgrid",
+    }
     default_pat = pattern_map.get(history.get("pattern", "checkerboard"), "1")
-    pat_choice = Prompt.ask("Target pattern", choices=["1", "2", "3"], default=default_pat)
+    pat_choice = Prompt.ask("Target pattern", choices=["1", "2", "3", "4", "5"], default=default_pat)
     args.pattern = rev_pattern_map[pat_choice]
     history["pattern"] = args.pattern
 
     # Grid dimensions
-    console.print("\n[bold]4. Target Dimensions (Inner Corners):[/bold]")
-    console.print("[dim]Inner corners = (number of black/white squares - 1)[/dim]")
-    args.cols = IntPrompt.ask("Inner corners along width (columns)", default=int(history.get("cols", 8)))
-    args.rows = IntPrompt.ask("Inner corners along height (rows)", default=int(history.get("rows", 5)))
-    args.square_size = FloatPrompt.ask("Square size or circle spacing (in mm)", default=float(history.get("square_size", 40.0)))
+    if args.pattern == "charuco":
+        console.print("\n[bold]4. ChArUco Board Dimensions:[/bold]")
+        console.print("[dim]Squares along width/height, square size, and inner ArUco marker size[/dim]")
+        args.cols = IntPrompt.ask("Number of chessboard squares along width (columns)", default=int(history.get("cols", 11)))
+        args.rows = IntPrompt.ask("Number of chessboard squares along height (rows)", default=int(history.get("rows", 8)))
+        args.square_size = FloatPrompt.ask("Chessboard square size (in mm)", default=float(history.get("square_size", 30.0)))
+        default_marker = float(history.get("marker_size", 0.0))
+        if default_marker <= 0:
+            default_marker = round(args.square_size * 0.75, 1)
+        args.marker_size = FloatPrompt.ask("ArUco marker size inside squares (in mm)", default=default_marker)
+        history["marker_size"] = args.marker_size
+    elif args.pattern in ("aprilgrid", "kalibr"):
+        console.print("\n[bold]4. Kalibr / AprilGrid Target Dimensions:[/bold]")
+        console.print("[dim]Number of tags (tagCols x tagRows), tag marker size, and tag spacing[/dim]")
+        args.cols = IntPrompt.ask("Number of tags along width (tagCols)", default=int(history.get("cols", 6)))
+        args.rows = IntPrompt.ask("Number of tags along height (tagRows)", default=int(history.get("rows", 6)))
+        args.square_size = FloatPrompt.ask("AprilTag marker size (tagSize in mm)", default=float(history.get("square_size", 40.0)))
+        default_spacing = float(history.get("marker_size", 0.0))
+        if default_spacing <= 0:
+            default_spacing = round(args.square_size * 0.3, 1)
+        args.marker_size = FloatPrompt.ask("Spacing between tags (tagSpacing in mm)", default=default_spacing)
+        history["marker_size"] = args.marker_size
+    else:
+        console.print("\n[bold]4. Target Dimensions (Inner Corners):[/bold]")
+        console.print("[dim]Inner corners = (number of black/white squares - 1)[/dim]")
+        args.cols = IntPrompt.ask("Inner corners along width (columns)", default=int(history.get("cols", 8)))
+        args.rows = IntPrompt.ask("Inner corners along height (rows)", default=int(history.get("rows", 5)))
+        args.square_size = FloatPrompt.ask("Square size or circle spacing (in mm)", default=float(history.get("square_size", 40.0)))
+        args.marker_size = 0.0
+        history["marker_size"] = 0.0
+
     history["cols"] = args.cols
     history["rows"] = args.rows
     history["square_size"] = args.square_size
@@ -923,7 +985,9 @@ def main():
         "cols": args.cols,
         "rows": args.rows,
         "square_size": args.square_size,
+        "marker_size": getattr(args, "marker_size", 0.0),
         "pattern": args.pattern,
+        "aruco_dict": getattr(args, "aruco_dict", ""),
         "model": args.model,
         "filter_outliers": args.filter_outliers,
         "target_frames": getattr(args, "target_frames", 25),
@@ -960,16 +1024,26 @@ def main():
             args.rows = int(saved_cfg["rows"])
         if not cli_arg_provided("--square-size") and "square_size_mm" in saved_cfg:
             args.square_size = float(saved_cfg["square_size_mm"])
+        if not cli_arg_provided("--marker-size") and "marker_size_mm" in saved_cfg:
+            args.marker_size = float(saved_cfg["marker_size_mm"])
         if not cli_arg_provided("--pattern") and "pattern" in saved_cfg:
             args.pattern = saved_cfg["pattern"]
+        if not cli_arg_provided("--aruco-dict") and "aruco_dict" in saved_cfg:
+            args.aruco_dict = saved_cfg["aruco_dict"]
         if not cli_arg_provided("--model") and "model" in saved_cfg:
             args.model = saved_cfg["model"]
         if not cli_arg_provided("--camera-name", "--name") and "camera_name" in saved_json:
             args.camera_name = saved_json["camera_name"]
 
+    marker_info = ""
+    if args.pattern == "charuco" and getattr(args, "marker_size", 0.0):
+        marker_info = f", marker: {args.marker_size}mm"
+    elif args.pattern in ("aprilgrid", "kalibr") and getattr(args, "marker_size", 0.0):
+        marker_info = f", spacing: {args.marker_size}mm"
+
     target_output_dir = resume_path.resolve() if resume_path else base_output_dir.resolve()
     console.print(Panel(
-        f"[bold]Target:[/bold] {args.pattern.capitalize()} ({args.cols}×{args.rows} inner corners, {args.square_size}mm)\n"
+        f"[bold]Target:[/bold] {args.pattern.capitalize()} ({args.cols}×{args.rows}, {args.square_size}mm{marker_info})\n"
         f"[bold]Distortion Model:[/bold] {args.model.capitalize()}\n"
         f"[bold]Output Directory:[/bold] {target_output_dir}",
         title="🚀 Camera Calibrator Initialized"
@@ -980,7 +1054,9 @@ def main():
         rows=args.rows,
         cols=args.cols,
         square_size_mm=args.square_size,
-        pattern_type=args.pattern
+        pattern_type=args.pattern,
+        marker_size_mm=getattr(args, "marker_size", None),
+        aruco_dict_name=getattr(args, "aruco_dict", None)
     )
 
     # 2. Load previous candidates if resuming
@@ -1060,7 +1136,10 @@ def main():
 
     # 6. Run Calibration
     calibrator = CameraCalibrator(distortion_model=args.model)
-    obj_points = [detector.object_points for _ in selected_frames]
+    obj_points = [
+        f.object_points if getattr(f, "object_points", None) is not None else detector.object_points
+        for f in selected_frames
+    ]
     img_points = [f.corners for f in selected_frames]
     frame_indices = [f.frame_idx for f in selected_frames]
 
@@ -1100,6 +1179,8 @@ def main():
         "rows": args.rows,
         "cols": args.cols,
         "square_size_mm": args.square_size,
+        "marker_size_mm": getattr(args, "marker_size", 0.0),
+        "aruco_dict": getattr(args, "aruco_dict", ""),
         "model": args.model,
         "camera_card": camera_card or "",
         "device_node": str(device_node) if device_node else "",
@@ -1131,13 +1212,19 @@ def main():
     # Save keyframe coordinates for fast resuming in the future
     active_selected = [f for f in selected_frames if f.frame_idx not in removed_outliers]
     if active_selected:
+        has_varying_corners = len(set(len(f.corners) for f in active_selected)) > 1
+        save_dict = {
+            "corners": np.array([f.corners for f in active_selected], dtype=object if has_varying_corners else np.float32),
+            "frame_indices": np.array([f.frame_idx for f in active_selected], dtype=np.int32),
+            "sharpness": np.array([f.sharpness for f in active_selected], dtype=np.float32),
+            "importance": np.array([f.importance_score for f in active_selected], dtype=np.float32),
+            "image_size": np.array([image_size[0], image_size[1]], dtype=np.int32)
+        }
+        if any(getattr(f, "object_points", None) is not None for f in active_selected):
+            save_dict["object_points"] = np.array([f.object_points for f in active_selected], dtype=object)
         np.savez_compressed(
             camera_output_dir / "keyframe_data.npz",
-            corners=np.array([f.corners for f in active_selected], dtype=np.float32),
-            frame_indices=np.array([f.frame_idx for f in active_selected], dtype=np.int32),
-            sharpness=np.array([f.sharpness for f in active_selected], dtype=np.float32),
-            importance=np.array([f.importance_score for f in active_selected], dtype=np.float32),
-            image_size=np.array([image_size[0], image_size[1]], dtype=np.int32)
+            **save_dict
         )
 
 

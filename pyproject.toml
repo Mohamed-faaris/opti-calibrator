@@ -8,6 +8,7 @@ dependencies = [
     "matplotlib>=3.11.2",
     "numpy>=2.4.6",
     "opencv-python>=5.0.0.93",
+    "pupil-apriltags>=1.0.4.post11",
     "pyyaml>=6.0.3",
     "rich>=15.0.0",
     "streamlit>=1.65.0",

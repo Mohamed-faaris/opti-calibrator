@@ -70,10 +70,12 @@ uv run python calibrate.py --images ./photos/
 | `--resolution`, `-res` | `None` | Stream resolution as `WxH` (e.g. `1280x720`, `1920x1080`, `640x480`) |
 | `--fps` | `None` | Stream frame rate (e.g. `30`, `60`) |
 | `--fourcc` | `None` | Pixel format FourCC code (e.g. `MJPG`, `YUYV`, `GREY`) |
-| `--cols` | `8` | Inner corners along width |
-| `--rows` | `5` | Inner corners along height |
-| `--square-size` | `40.0` | Square/circle spacing in mm |
-| `--pattern` | `checkerboard` | `checkerboard`, `circles`, or `asymmetric_circles` |
+| `--cols` | `8` | Number of inner corners (checkerboard), squares (charuco), or tags (aprilgrid) along width |
+| `--rows` | `5` | Number of inner corners (checkerboard), squares (charuco), or tags (aprilgrid) along height |
+| `--square-size` | `40.0` | Square/circle spacing, or AprilTag marker size in mm |
+| `--marker-size` | `0.0` | ArUco marker size (ChArUco) or tag spacing (AprilGrid) in mm. If 0, auto-calculated from square size |
+| `--pattern` | `checkerboard` | `checkerboard`, `circles`, `asymmetric_circles`, `charuco`, or `aprilgrid` (`kalibr`) |
+| `--aruco-dict` | `""` | ArUco dictionary (e.g. `DICT_6X6_250` for ChArUco, `DICT_APRILTAG_36h11` for AprilGrid) |
 | `--model` | `standard` / `rational` | **Flat target (rigid glass/aluminum/acrylic)**: use `--model standard` (5-param $k_1, k_2, p_1, p_2, k_3$).<br>**Paper print (glued to cardboard or flexible)**: use `--model rational` (8-param) to compensate for slight non-flat curvature |
 | `--target-frames` | `25` | Number of diverse keyframes to pick |
 | `--min-sharpness`| `30.0` | Laplacian variance blur filter |
