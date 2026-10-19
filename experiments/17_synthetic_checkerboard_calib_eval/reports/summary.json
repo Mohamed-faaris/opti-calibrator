@@ -1,0 +1,42 @@
+{
+  "experiment_id": 17,
+  "experiment_name": "synthetic_checkerboard_calib_eval",
+  "pattern_type": "checkerboard",
+  "total_scenes": 15,
+  "valid_views_used": 15,
+  "ground_truth": {
+    "fx": 920.0,
+    "fy": 920.0,
+    "cx": 640.0,
+    "cy": 360.0,
+    "distortion": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "estimated": {
+    "fx": 926.3826868259857,
+    "fy": 925.6458305687744,
+    "cx": 639.7986959725005,
+    "cy": 359.505691076552,
+    "distortion": [
+      0.0013652451924909385,
+      -0.029322818577901956,
+      -3.5306238617696115e-05,
+      6.564216148657493e-05,
+      0.10206509932536446
+    ],
+    "rms_reprojection_error_px": 0.16158484282040658
+  },
+  "errors": {
+    "fx_error_pct": 0.6937703071723619,
+    "fy_error_pct": 0.6136772357363462,
+    "cx_error_px": 0.2013040274995319,
+    "cy_error_px": 0.4943089234479885,
+    "distortion_l2_norm": 0.10620255006123222
+  },
+  "accuracy_pass": true
+}

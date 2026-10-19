@@ -1,0 +1,12 @@
+{
+  "scene_id": "010",
+  "status": "DETECTED",
+  "corners_detected": 96,
+  "coverage_zone": [
+    1,
+    1
+  ],
+  "sharpness": 379.41320420809024,
+  "single_view_pnp_rms_err_px": 0.5124546885490417,
+  "single_view_pnp_max_err_px": 0.7357807755470276
+}

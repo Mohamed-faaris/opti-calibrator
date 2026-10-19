@@ -1,0 +1,31 @@
+{
+  "scene_id": "005",
+  "pattern_type": "aprilgrid",
+  "camera_intrinsics": {
+    "width": 1280,
+    "height": 720,
+    "fx": 920.0,
+    "fy": 920.0,
+    "cx": 640.0,
+    "cy": 360.0,
+    "distortion": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "target_pose_opencv": {
+    "x_m": 0.06,
+    "y_m": 0.0,
+    "z_m": 0.82,
+    "rx_rad": 0.0,
+    "ry_rad": -0.31,
+    "rz_rad": 0.0
+  },
+  "board_dimensions_m": {
+    "width": 0.34,
+    "height": 0.236
+  }
+}
