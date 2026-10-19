@@ -1,0 +1,60 @@
+{
+  "camera_name": "rl720_april",
+  "calibration_info": {
+    "model": "standard",
+    "rms_reprojection_error_px": 70.0711,
+    "image_width": 1280,
+    "image_height": 720,
+    "fov_horizontal_deg": 62.16,
+    "fov_vertical_deg": 36.45,
+    "num_views_used": 61
+  },
+  "device_info": {
+    "card_name": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-2)",
+    "device_node": "/dev/video6",
+    "stream_type": "RGB / Color"
+  },
+  "camera_matrix": {
+    "fx": 1061.6782717465594,
+    "fy": 1093.4800603004232,
+    "cx": 457.2159787621035,
+    "cy": 291.5477979651959,
+    "matrix_3x3": [
+      [
+        1061.6782717465594,
+        0.0,
+        457.2159787621035
+      ],
+      [
+        0.0,
+        1093.4800603004232,
+        291.5477979651959
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "distortion_coefficients": [
+    -0.3214588491738568,
+    0.7135131083107903,
+    0.0703078005428842,
+    0.06388789081395745,
+    -1.2484122787521588
+  ],
+  "config": {
+    "camera_name": "rl720_april",
+    "pattern": "aprilgrid",
+    "rows": 4,
+    "cols": 9,
+    "square_size_mm": 40.0,
+    "marker_size_mm": 12.0,
+    "aruco_dict": "",
+    "model": "standard",
+    "camera_card": "Intel(R) RealSense(TM) Depth Ca (usb-0000:00:14.0-2)",
+    "device_node": "/dev/video6",
+    "stream_type": "RGB / Color"
+  }
+}

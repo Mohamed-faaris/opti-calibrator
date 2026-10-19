@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 import cv2
+import numpy as np
 from rich.console import Console
 from rich.prompt import IntPrompt, Prompt
 from rich.table import Table
@@ -99,6 +100,7 @@ def enumerate_v4l2_streams() -> List[CameraDeviceStream]:
                 formats: List[str] = []
                 profiles_map = {}
                 cur_fmt = "DEFAULT"
+                cur_w, cur_h = None, None
 
                 for line in fmts_ext.split("\n"):
                     line_s = line.strip()
@@ -107,21 +109,29 @@ def enumerate_v4l2_streams() -> List[CameraDeviceStream]:
                         cur_fmt = m_fmt.group(1).strip()
                         if cur_fmt not in formats:
                             formats.append(cur_fmt)
+                        cur_w, cur_h = None, None
 
                     m_size = re.search(r"Size:\s+Discrete\s+(\d+)x(\d+)", line_s)
                     if m_size:
-                        w, h = int(m_size.group(1)), int(m_size.group(2))
-                        key = (w, h)
+                        cur_w, cur_h = int(m_size.group(1)), int(m_size.group(2))
+                        key = (cur_w, cur_h, cur_fmt)
                         if key not in profiles_map:
-                            profiles_map[key] = StreamProfile(width=w, height=h, format=cur_fmt)
+                            profiles_map[key] = StreamProfile(width=cur_w, height=cur_h, format=cur_fmt)
+
+                    m_fps = re.search(r"\(([0-9.]+)\s+fps\)", line_s)
+                    if m_fps and cur_w is not None and cur_h is not None:
+                        fps_val = float(m_fps.group(1))
+                        key = (cur_w, cur_h, cur_fmt)
+                        if key in profiles_map and fps_val not in profiles_map[key].fps_list:
+                            profiles_map[key].fps_list.append(fps_val)
 
                 if not profiles_map:
                     continue
 
-                # Sort resolutions descending
+                # Sort resolutions descending, preferring MJPG for HD/FHD streams to prevent USB bandwidth saturation
                 sorted_profiles = sorted(
                     profiles_map.values(),
-                    key=lambda p: (p.width * p.height, p.width),
+                    key=lambda p: (p.width * p.height, 1 if p.format in ("MJPG", "JPEG") else 0, p.width),
                     reverse=True
                 )
 
@@ -214,27 +224,32 @@ def prompt_select_stream(
     if chosen_stream.profiles:
         console.print(f"\n[bold]Select resolution for {chosen_stream.device_node} ({chosen_stream.stream_type}):[/bold]")
         prof_choices = []
-        for j, prof in enumerate(chosen_stream.profiles[:8], 1):
-            is_rec = " [bold green](Recommended)[/bold green]" if j == 1 or (prof.width == 1280 and prof.height == 720) else ""
-            console.print(f"  [cyan]{j}[/cyan]) {prof.resolution_str} ({prof.format}){is_rec}")
+        for j, prof in enumerate(chosen_stream.profiles[:12], 1):
+            is_rec = ""
+            if j == 1 or (prof.width == 1280 and prof.height == 720 and prof.format in ("MJPG", "DEFAULT")):
+                is_rec = " [bold green](Recommended)[/bold green]"
+            elif prof.width >= 1280 and prof.format in ("MJPG", "JPEG"):
+                is_rec = " [bold cyan](Recommended for USB)[/bold cyan]"
+            fps_str = f" @ {int(prof.fps_list[0])}fps" if prof.fps_list else ""
+            console.print(f"  [cyan]{j}[/cyan]) {prof.resolution_str} ({prof.format}{fps_str}){is_rec}")
             prof_choices.append(str(j))
 
         prof_choices.append("default")
         console.print("  [cyan]default[/cyan]) Use camera native default")
 
         rec_default = "1"
-        # If default_resolution or 1280x720 exists, find its index
         matched_user_default = False
         if default_resolution:
-            for k, p in enumerate(chosen_stream.profiles[:8], 1):
+            for k, p in enumerate(chosen_stream.profiles[:12], 1):
                 if p.resolution_str == default_resolution:
                     rec_default = str(k)
                     matched_user_default = True
-                    break
+                    if p.format in ("MJPG", "JPEG"):
+                        break
 
         if not matched_user_default:
-            for k, p in enumerate(chosen_stream.profiles[:8], 1):
-                if p.width == 1280 and p.height == 720:
+            for k, p in enumerate(chosen_stream.profiles[:12], 1):
+                if p.width == 1280 and p.height == 720 and p.format in ("MJPG", "DEFAULT"):
                     rec_default = str(k)
                     break
 
@@ -302,6 +317,7 @@ def open_camera_stream(
     Returns (cap, (actual_width, actual_height)).
     """
     # If camera_target is a string but not directly a digit or /dev/video*, check if it matches a card name
+    matched_stream = None
     if isinstance(camera_target, str) and not camera_target.isdigit() and not camera_target.startswith("/dev/video"):
         matched_stream = find_stream_by_name(camera_target)
         if matched_stream is not None:
@@ -331,18 +347,35 @@ def open_camera_stream(
 
 
 
-    # Set custom FOURCC format if specified
-    if target_fourcc:
-        fcc = target_fourcc.ljust(4)[:4]
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fcc))
+    # Set buffer size to 1: prevents queue backlog in kernel V4L2 buffers during frame processing
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    # Resolve FourCC: if not explicitly set and resolution is high (>=720p), prefer MJPG if supported
+    fcc = target_fourcc
+    if not fcc:
+        if matched_stream and "MJPG" in matched_stream.formats:
+            fcc = "MJPG"
+        elif target_width and target_width >= 1280:
+            try:
+                node_str = camera_target if isinstance(camera_target, str) and camera_target.startswith("/dev/video") else f"/dev/video{target_handle}"
+                out = subprocess.check_output(["v4l2-ctl", "-d", node_str, "--list-formats"], stderr=subprocess.DEVNULL, text=True)
+                if "MJPG" in out or "JPEG" in out:
+                    fcc = "MJPG"
+            except Exception:
+                pass
+
+    if fcc:
+        clean_fcc = fcc.ljust(4)[:4]
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*clean_fcc))
 
     # Set requested resolution
     if target_width and target_height:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_height)
 
-    if target_fps:
-        cap.set(cv2.CAP_PROP_FPS, target_fps)
+    # Set requested framerate (default to 30 FPS to prevent unconstrained 60-120 FPS USB packet loss)
+    effective_fps = target_fps if target_fps is not None else 30.0
+    cap.set(cv2.CAP_PROP_FPS, effective_fps)
 
     # Read a test frame to ensure stream is active and retrieve actual dimensions
     ret, frame = cap.read()
@@ -352,9 +385,39 @@ def open_camera_stream(
 
     actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    actual_fps = cap.get(cv2.CAP_PROP_FPS)
+    actual_fcc_int = int(cap.get(cv2.CAP_PROP_FOURCC))
+    actual_fcc_str = "".join([chr((actual_fcc_int >> (8 * i)) & 0xFF) for i in range(4)]).strip()
+    backend_name = cap.getBackendName()
 
     if frame is not None:
         actual_h, actual_w = frame.shape[:2]
 
-    console.print(f"[green]✓ Connected to {camera_target} at {actual_w}×{actual_h} px[/green]")
+    console.print(
+        f"[green]✓ Connected to {camera_target} via {backend_name} | "
+        f"{actual_w}×{actual_h} px @ {actual_fps:.0f} FPS | FourCC: '{actual_fcc_str}'[/green]"
+    )
     return cap, (actual_w, actual_h)
+
+
+def is_frame_corrupted(frame: Optional[np.ndarray]) -> bool:
+    """
+    Detect horizontal green, magenta, black, and white corruption bands
+    caused by UYVY byte drops or MJPEG packet loss.
+    """
+    if frame is None or not hasattr(frame, "shape") or len(frame.shape) != 3:
+        return True
+    h, w, c = frame.shape
+    if h < 16 or w < 16 or c != 3:
+        return True
+
+    # Subsample rows for fast evaluation (< 0.2 ms)
+    sampled = frame[::4, :, :]
+    g = sampled[:, :, 1].astype(float)
+    r = sampled[:, :, 2].astype(float)
+
+    # In horizontal green / magenta bands, mean row (G - R) disparity exceeds threshold
+    row_g_diff = np.mean(g - r, axis=1)
+    if float(np.max(np.abs(row_g_diff))) > 45.0:
+        return True
+    return False

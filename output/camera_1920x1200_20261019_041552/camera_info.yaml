@@ -1,0 +1,58 @@
+image_width: 1920
+image_height: 1200
+camera_name: camera_1920x1200_20261019_041552
+camera_card: See3CAM_24CUG (usb-0000:00:14.0-2)
+device_node: /dev/video0
+stream_type: Color (MJPEG)
+camera_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 590.6431589147674
+  - 0.0
+  - 863.5046355884718
+  - 0.0
+  - 577.3564116015409
+  - 504.2974816462095
+  - 0.0
+  - 0.0
+  - 1.0
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data:
+  - -0.07468414088601014
+  - 0.0022346895483133216
+  - -0.0018650187836632033
+  - 0.008661815295293605
+  - -3.288312528110414e-05
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+projection_matrix:
+  rows: 3
+  cols: 4
+  data:
+  - 590.6431589147674
+  - 0.0
+  - 863.5046355884718
+  - 0.0
+  - 0.0
+  - 577.3564116015409
+  - 504.2974816462095
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0

@@ -25,7 +25,7 @@ from rich.table import Table
 from .camera_calibrator import CameraCalibrator, save_calibration_outputs
 from .detector import PatternDetector
 from .frame_selector import CoverageTracker, FrameCandidate, OptimalFrameSelector, AdaptiveImportanceFrameSelector
-from .stream_manager import open_camera_stream, enumerate_v4l2_streams, prompt_select_stream
+from .stream_manager import open_camera_stream, enumerate_v4l2_streams, prompt_select_stream, is_frame_corrupted
 from .visualizer import CameraHUD, create_undistort_comparison, plot_coverage_heatmap, plot_reprojection_errors
 
 console = Console()
@@ -360,8 +360,11 @@ def run_live_camera_capture(
 
     while True:
         ret, frame = cap.read()
-        if not ret:
+        if not ret or frame is None:
             break
+
+        if is_frame_corrupted(frame):
+            continue
 
         frame_counter += 1
         h, w = frame.shape[:2]
